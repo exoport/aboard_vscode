@@ -1,0 +1,11 @@
+# Node toolchain. Nothing built or fetched belongs in the history: a .vsix is a
+# release artifact and out/ is whatever tsc last produced.
+node_modules/
+out/
+dist/
+*.vsix
+
+# A board's own directory, if one is ever created here while testing the
+# extension against a real server. It is local, per-developer and unversioned —
+# the same posture the aboard repo takes towards its own.
+.aboard/
