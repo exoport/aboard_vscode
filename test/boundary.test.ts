@@ -44,3 +44,24 @@ describe('the pure modules load outside VS Code', () => {
     });
   }
 });
+
+describe('the streams never call setEncoding', () => {
+  it('reads Buffers and decodes them itself', () => {
+    // VS Code 1.134's extension host is Node 24. With a debugger attached (the
+    // Extension Development Host, every F5) Node's inspector network
+    // instrumentation adds its own `data` listener to every response and
+    // reports `dataLength: chunk.byteLength`. A string has no byteLength, so
+    // `res.setEncoding('utf8')` made that listener throw on every frame, the
+    // parser reported `Parse Error: JS Exception`, and the event stream died
+    // on each write — the sidebar showed a dot only after a manual Refresh.
+    // Seen in the exthost log on 2026-08-26, twice, at the seconds two writes
+    // landed. Buffers plus a StringDecoder are the whole fix; this keeps it.
+    const src = path.join(__dirname, '..', '..', 'src');
+    for (const file of fs.readdirSync(src)) {
+      const body = fs.readFileSync(path.join(src, file), 'utf8');
+      // Code only: the note in board.ts names the call it forbids.
+      const hit = body.split('\n').findIndex((line) => !/^\s*(\/\/|\*)/.test(line) && /\.setEncoding\(/.test(line));
+      assert.equal(hit, -1, `${file}:${hit + 1} calls setEncoding on a stream — Node 24's inspector kills the socket for a string chunk`);
+    }
+  });
+});

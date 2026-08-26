@@ -13,6 +13,7 @@
 
 import * as fs from 'node:fs';
 import * as http from 'node:http';
+import { StringDecoder } from 'node:string_decoder';
 import * as path from 'node:path';
 
 import { SseParser, classifyFrame, backoffDelay, type BoardFrame } from './sse';
@@ -683,9 +684,20 @@ export class Board {
           // A ten-second timer must not be what keeps a Node process alive; the
           // stream's own socket is the thing with a reason to.
           stable.unref?.();
-          res.setEncoding('utf8');
-          res.on('data', (chunk: string) => {
-            for (const value of parser.push(chunk)) {
+          // NEVER `res.setEncoding('utf8')` here. With a debugger attached —
+          // the Extension Development Host, every F5 — Node's inspector network
+          // instrumentation adds its own `data` listener to every response and
+          // reports `dataLength: chunk.byteLength`. A string has no byteLength,
+          // so on Node 24 (VS Code 1.134's extension host) that listener throws
+          // `Missing dataLength in event`, the HTTP parser reports it as
+          // `Parse Error: JS Exception`, and the socket is destroyed — on EVERY
+          // frame, which is why the sidebar needed a manual Refresh to show a
+          // dot the board had already broadcast. Buffers carry a byteLength;
+          // the decoder below handles a multi-byte character split across two
+          // chunks, which is the one thing setEncoding did for us.
+          const decoder = new StringDecoder('utf8');
+          res.on('data', (chunk: Buffer) => {
+            for (const value of parser.push(decoder.write(chunk))) {
               dispatch(classifyFrame(value), handlers);
             }
           });

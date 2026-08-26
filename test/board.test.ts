@@ -21,6 +21,7 @@ interface Stub {
   /** How many SSE clients are attached right now. */
   readonly listeners: number;
   push(frame: string): void;
+  pushRaw(bytes: Buffer): void;
   close(): Promise<void>;
 }
 
@@ -37,6 +38,12 @@ async function startStub(over: Partial<Doc> = {}): Promise<Stub> {
     alwaysConflict: false,
     get listeners() {
       return clients.size;
+    },
+    /** Write raw bytes — for a frame split in the middle of a character. */
+    pushRaw(bytes: Buffer) {
+      for (const res of clients) {
+        res.write(bytes);
+      }
     },
     push(frame) {
       for (const res of clients) {
@@ -274,6 +281,29 @@ describe('events', () => {
       await delay(50);
       assert.deepEqual(states, ['cli']);
       assert.deepEqual(waiters, [3]);
+    } finally {
+      sub.dispose();
+    }
+  });
+
+  it('reassembles a frame whose multi-byte character is split across two chunks', async () => {
+    // The stream reads Buffers (see the setEncoding note in board.ts) and
+    // decodes them itself, so a two-byte character cut by a TCP boundary must
+    // still come out as one character and not as two replacement marks.
+    const stub = await startStub();
+    const board = boardFor(stub);
+    const states: Array<string | null> = [];
+    let connected = false;
+    const sub = board.events({ onState: (origin) => states.push(origin), onStatus: (up) => { connected = up; } });
+    try {
+      await waitFor(() => connected && stub.listeners > 0);
+      const bytes = Buffer.from('data: {"origin":"agent-ñ"}\n\n', 'utf8');
+      const cut = bytes.indexOf(Buffer.from('ñ', 'utf8')) + 1; // between the two bytes of ñ
+      stub.pushRaw(bytes.subarray(0, cut));
+      await delay(30);
+      stub.pushRaw(bytes.subarray(cut));
+      await waitFor(() => states.length === 1);
+      assert.deepEqual(states, ['agent-ñ']);
     } finally {
       sub.dispose();
     }
