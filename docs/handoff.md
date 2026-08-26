@@ -664,12 +664,16 @@ Nothing below can be asserted headlessly. Ticked items were observed by the huma
       revealed (`retainContextWhenHidden`).
 - [ ] `html` tabs paint inside the panel — the webview console is the last word, not
       a headless run.
-- [ ] Dots appear within a second of an agent's write, and clear from the sidebar.
-      **This is the one to check first next time**: it failed on the first run, and
-      the repair (well-formed SVGs) is asserted by `test/media.test.ts` and by a
-      Chromium render, but nobody has yet seen a dot in a real sidebar.
-- [ ] The tab strip does NOT appear inside the panel, on a current binary — and on an
-      old one, exactly one warning says why.
+- [x] Dots appear within a second of an agent's write — observed by the human on
+      2026-08-26 (third run): a periwinkle dot on a touched tab and a red one on a
+      removal request, and after the stream fix (`cff655a`) a new dot on
+      Coordination arrived with no Refresh. The first two runs needed Refresh —
+      first the malformed SVGs, then Node 24's inspector killing the stream on
+      every string chunk under F5. Clearing from the sidebar (Dismiss) is still
+      unobserved.
+- [x] The tab strip does NOT appear inside the panel on a current binary — observed
+      2026-08-26 against `aboard de7773f`. The old-binary warning itself is still
+      unobserved in a real host (asserted by `test/oldboard.test.ts`).
 - [ ] A removal request shows red and both answers do what they say.
 - [ ] Notify lights only when a session is genuinely parked on `aboard wait`, and
       pressing it releases that session.

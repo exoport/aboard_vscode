@@ -138,6 +138,18 @@ any console. The human found both by looking at the screen.
 - **The board's own tab strip inside the panel.** Not this extension either: that board
   was served by a binary built before `?chrome=` landed. Hence the probe above.
 
+### And the second and third runs
+
+The second run (same day) still needed Refresh for a dot to appear, and the Output
+channel said why: `event stream … dropped: Parse Error: JS Exception` at the exact
+second of every write. VS Code 1.134's extension host is Node 24, and with F5's
+debugger attached Node's inspector network instrumentation adds a `data` listener
+to every response that reports `dataLength: chunk.byteLength` — a string chunk
+(from `res.setEncoding('utf8')`) has none, the listener throws, and the parser
+destroys the socket. The stream reads Buffers now (`cff655a`). The third run saw a
+dot arrive live with no Refresh, and `ss` showed the host's connection to the board
+surviving a write.
+
 ## What it does
 
 - **Tree** in `aboard.json` order, always — the order is the human's. Label is the
