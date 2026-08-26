@@ -1,0 +1,36 @@
+{
+  // F5 from this repo: typecheck, bundle, then open an Extension Development Host.
+  // `args` decides what that host has open, and this extension does nothing without
+  // a workspace folder containing an `.aboard/` project — so point the second entry
+  // at one rather than staring at an empty welcome view.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "npm: build"
+    },
+    {
+      "name": "Run Extension (open an aboard project)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "${input:projectPath}",
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "npm: build"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "projectPath",
+      "type": "promptString",
+      "description": "Folder with an .aboard/ project to open in the dev host",
+      "default": "${env:HOME}"
+    }
+  ]
+}

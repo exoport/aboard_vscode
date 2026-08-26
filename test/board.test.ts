@@ -7,7 +7,7 @@ import * as assert from 'node:assert/strict';
 import * as http from 'node:http';
 import { afterEach, describe, it } from 'node:test';
 
-import { Board, describeWriteFailure, type Doc, type Instance } from '../src/board';
+import { Board, describeWriteFailure, shellSupportsChrome, type Doc, type Instance } from '../src/board';
 
 interface Stub {
   server: http.Server;
@@ -328,5 +328,79 @@ describe('a request that is cut off', () => {
     const board = boardFor(stub);
     assert.equal((await board.state()).rev, 41);
     assert.equal((await board.state()).rev, 41);
+  });
+});
+
+describe('the ?chrome= probe', () => {
+  // There is no field in `/capabilities` that says whether the shell understands
+  // `?chrome=` — the manifest carries app, schema, capsHash, types, commands,
+  // rootFlags and routes, and none of them describes the shell's query
+  // parameters. `capsHash` moves whenever any spec moves, so it can say
+  // "different" but never "older", and `/health.version` is `git describe`, which
+  // on an untagged tree is a commit hash and does not order either. So the probe
+  // reads the shell and looks for the line that IS the feature.
+
+  it('recognises a shell that stamps the chrome attribute', () => {
+    const modern = `<body>\n<script>document.body.dataset.chrome = ['full','notabs','none'].indexOf(want) >= 0 ? want : 'full';</script>`;
+    assert.equal(shellSupportsChrome(modern), true);
+  });
+
+  it('recognises the attribute spelled as a selector, in case the stamp moves into CSS', () => {
+    assert.equal(shellSupportsChrome('<style>body[data-chrome="notabs"] .tabs{display:none}</style>'), true);
+  });
+
+  it('says no to the shell that shipped before it landed', () => {
+    // The board the human framed on 2026-08-26 was served by a binary built
+    // before `?chrome=`, and an unknown query parameter is not an error, so it
+    // drew its own tab strip inside the panel and said nothing.
+    const old = `<body>\n<script type="module" src="/aboard.js"></script>\n<div class="tabstrip"><div class="tabs"></div></div>`;
+    assert.equal(shellSupportsChrome(old), false);
+  });
+});
+
+describe('the event stream when the board is not really there', { timeout: 30_000 }, () => {
+  // A port that accepts a connection and drops it is not a hypothetical: a board
+  // crash-looping under a supervisor, a proxy closing an idle stream, or another
+  // process that grabbed the derived port all look exactly like this. The backoff
+  // used to be reset the moment the response HEADERS arrived, so every such cycle
+  // counted as a success and the delay never left its 1s floor — an open socket
+  // and an output-channel line every second, for the life of the window, from the
+  // one mechanism whose stated job is not to do that.
+  it('backs off instead of reconnecting at the floor forever', async () => {
+    let connects = 0;
+    const server = http.createServer((req, res) => {
+      if ((req.url ?? '').startsWith('/events')) {
+        connects += 1;
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        res.write('retry: 1000\n\n');
+        res.write('data: {"origin":"someone"}\n\n');
+        setTimeout(() => res.socket?.destroy(), 60);
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    const board = new Board('/tmp/nowhere', '/tmp/nowhere/instance.json', {
+      app: 'aboard',
+      project: '/tmp/nowhere',
+      port,
+    } as Instance);
+
+    const frames: Array<string | null> = [];
+    const sub = board.events({ onState: (origin) => frames.push(origin) });
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+    sub.dispose();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+
+    // It does keep trying — a board that comes back must be picked up.
+    assert.ok(connects >= 2, `expected at least one reconnect, got ${connects} connections`);
+    // But at 1s, 2s, 4s, … : three attempts fit in six seconds, not six.
+    assert.ok(connects <= 4, `expected the delay to grow; got ${connects} connections in 6s`);
+    // And each connection is one stream, not two: a socket that dies can report
+    // itself on both the response and the request, and both used to schedule a
+    // reconnect of their own.
+    assert.equal(frames.length, connects, `each connection should deliver its frame once, got ${frames.length}`);
   });
 });

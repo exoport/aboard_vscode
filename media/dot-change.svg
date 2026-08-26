@@ -1,5 +1,8 @@
-<!-- --agent, copied from pkg/aboard/web/app.css in the aboard repo.
-     The value lives in src/tokens.ts; a unit test asserts this file agrees with it. -->
+<!-- The "agent" token (periwinkle), copied from pkg/aboard/web/app.css in the
+     aboard repo. The value lives in src/tokens.ts; test/media.test.ts asserts
+     this file agrees with it AND that this comment stays legal XML: the token is
+     spelled with two leading hyphens in CSS, and writing it that way here made
+     the file not well-formed, which is silent — the row simply had no dot. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
   <circle cx="8" cy="8" r="4" fill="#a7adf4"/>
 </svg>

@@ -33,6 +33,16 @@ import { BoardTreeProvider, type BoardEntry, type Node } from './tree';
 
 const VIEW_ID = 'aboard.tabs';
 
+/**
+ * How many times a board's shell may be unreadable before the `?chrome=` probe
+ * gives up on it for this window.
+ *
+ * Three, and then silence: a board that answers `/health` and `/aboard.json` but
+ * not `/` is not a shape anybody has seen, and re-fetching a whole page on every
+ * write to chase it would cost more than the sentence it might produce.
+ */
+const CHROME_PROBE_TRIES = 3;
+
 class Controller implements vscode.Disposable {
   private readonly provider: BoardTreeProvider;
   private readonly view: vscode.TreeView<Node>;
@@ -45,6 +55,16 @@ class Controller implements vscode.Disposable {
   private caps = new Map<string, Capabilities>();
   private waiting = new Map<string, number>();
   private warnedSchema = new Set<string>();
+  /**
+   * Boards whose `?chrome=` answer is settled, or being asked for right now.
+   *
+   * Two states, and the `busy` one is the whole point: the probe is an await, so
+   * a guard set on its far side lets every reload that lands in the meantime
+   * start a probe of its own. See checkChromeContract.
+   */
+  private chromeProbe = new Map<string, 'busy' | 'done'>();
+  /** How many times a board's shell could not be read at all. */
+  private chromeUnreadable = new Map<string, number>();
   private reloadTimers = new Map<string, NodeJS.Timeout>();
   private discovering = false;
   private discoverAgain = false;
@@ -99,6 +119,12 @@ class Controller implements vscode.Disposable {
           sub.dispose();
           this.streams.delete(key);
           this.waiting.delete(key);
+          // And the `?chrome=` verdict: a board that stopped is the one case
+          // where the binary behind that key can change without a Refresh, so
+          // keeping the answer would silently suppress the warning for a board
+          // that came back on an OLDER binary.
+          this.chromeProbe.delete(key);
+          this.chromeUnreadable.delete(key);
           this.panels.get(key)?.dispose();
         }
       }
@@ -209,6 +235,69 @@ class Controller implements vscode.Disposable {
       this.log(`${board.title}: ${entry.problem}`);
     }
     this.render();
+    // Deliberately NOT awaited, and deliberately outside the try above: it is a
+    // background probe that ends in a notification, not something the tree has
+    // any reason to wait for, and a throw inside it must never be reported as
+    // "this board would not hand over its document".
+    void this.checkChromeContract(board);
+  }
+
+  /**
+   * Say so, once, when the board is older than the `?chrome=` contract.
+   *
+   * The first real run of this extension showed the board's own tab strip inside
+   * the panel, under the sidebar tree — two tab lists, one above the other. The
+   * cause was not this extension: the board was served by a binary built before
+   * `?chrome=` landed, and an unknown query parameter is silently ignored, so
+   * nothing anywhere said why. This is the sentence that says why.
+   *
+   * A warning, not an error: everything still works, it is just ugly. Once per
+   * board per window, and cleared by Refresh — which is what the human presses
+   * after updating the binary and restarting `aboard serve`.
+   */
+  private async checkChromeContract(board: Board): Promise<void> {
+    const key = board.instanceFile;
+    // Claimed BEFORE the await, not after. `reload()` runs on every SSE frame,
+    // and the guard used to be set on the far side of `supportsChrome()` — so an
+    // agent writing while the probe was in flight drove a second reload, which
+    // passed the guard and started a second probe. Measured against a shell that
+    // took 600ms to answer: THREE notifications for one board, from the one
+    // check in this extension whose entire contract is the word "once". Whoever
+    // gets here first owns the answer; everyone else is already covered by it.
+    if (this.chromeProbe.has(key)) {
+      return;
+    }
+    this.chromeProbe.set(key, 'busy');
+    const supported = await board.supportsChrome();
+    if (this.disposed) {
+      return;
+    }
+    if (supported === undefined) {
+      // Could not tell. Saying nothing beats guessing at the board's age — but
+      // the claim has to come back off, or a shell that was unreadable for one
+      // moment is never asked again. Bounded, because the alternative is a fetch
+      // of the whole shell on every write for the life of the window.
+      const tries = (this.chromeUnreadable.get(key) ?? 0) + 1;
+      this.chromeUnreadable.set(key, tries);
+      if (tries < CHROME_PROBE_TRIES) {
+        this.chromeProbe.delete(key);
+        return;
+      }
+      this.chromeProbe.set(key, 'done');
+      this.log(`${board.title}: could not read the board's shell to check ?chrome= after ${tries} tries — not asking again`);
+      return;
+    }
+    this.chromeProbe.set(key, 'done');
+    if (supported) {
+      return;
+    }
+    const message =
+      `The board serving ${board.title} (${board.instance.app} ${board.instance.version ?? 'of unknown version'}) ` +
+      'predates the `?chrome=` contract this extension asks for, so it will draw its own tab strip inside the ' +
+      'panel as well as here in the sidebar. Everything works; it is just doubled. Update the aboard binary and ' +
+      'restart the board, then press Refresh.';
+    this.log(`${board.title}: the board's shell does not understand ?chrome= — the tab strip will show in the panel`);
+    void vscode.window.showWarningMessage(message);
   }
 
   private render(): void {
@@ -453,6 +542,8 @@ class Controller implements vscode.Disposable {
     // Discovery, not just a re-read: "refresh" is what the human presses after a
     // restart, and a restart can change the port.
     this.caps.clear();
+    this.chromeProbe.clear();
+    this.chromeUnreadable.clear();
     await this.discover();
   }
 

@@ -306,6 +306,34 @@ export function basePathOf(instance: Instance): string {
   return normaliseBasePath(instance.base ?? instance.basePath ?? '');
 }
 
+/* --------------------------------------------------- the ?chrome= contract */
+
+/**
+ * Does the shell this board serves understand `?chrome=`?
+ *
+ * `?chrome=notabs` is what stops the board drawing its own tab strip inside the
+ * panel, and it landed on the aboard side on 2026-08-26. An older binary ignores
+ * the parameter — silently, because an unknown query parameter is not an error —
+ * so the human gets two tab lists stacked on top of each other and nothing
+ * anywhere says why. The first real run of this extension hit exactly that.
+ *
+ * **There is no field in `/capabilities` to test.** The manifest carries `app`,
+ * `schema`, `capsHash`, `types`, `commands`, `rootFlags` and `routes`, and none
+ * of them mentions the shell's query parameters; `capsHash` moved when `?chrome=`
+ * landed but a hash is opaque, so a client cannot tell "different" from "older".
+ * `/health.version` is `git describe --tags --always --dirty`, which on an
+ * untagged tree is a commit hash — also unordered. So the honest probe is to ask
+ * the shell itself: it stamps `document.body.dataset.chrome` in a classic script
+ * at the top of `<body>`, and that line is the feature. Testing the feature beats
+ * testing a proxy for it.
+ *
+ * Returns `undefined` when the shell could not be read at all — silence is right
+ * there, because a false alarm about the board's age is worse than no alarm.
+ */
+export function shellSupportsChrome(html: string): boolean {
+  return /dataset\s*\.\s*chrome\b/.test(html) || /\bdata-chrome\b/.test(html);
+}
+
 /* ------------------------------------------------------------------- client */
 
 export interface HttpResponse {
@@ -496,6 +524,27 @@ export class Board {
     return doc;
   }
 
+  /**
+   * Ask the shell whether it understands `?chrome=`.
+   *
+   * `undefined` means "could not tell" — a non-200, an empty body, a refused
+   * connection. The caller says nothing in that case; see shellSupportsChrome.
+   *
+   * `Accept: text/html` rather than this client's usual JSON, because this is
+   * the one route that answers with a page.
+   */
+  async supportsChrome(timeoutMs = 2500): Promise<boolean | undefined> {
+    try {
+      const res = await httpRequest(this.port, this.path('/'), { timeoutMs, headers: { Accept: 'text/html' } });
+      if (res.status !== 200 || res.body === '') {
+        return undefined;
+      }
+      return shellSupportsChrome(res.body);
+    } catch {
+      return undefined;
+    }
+  }
+
   async capabilities(): Promise<Capabilities> {
     const res = await httpRequest(this.port, this.path('/capabilities'));
     if (res.status !== 200) {
@@ -573,12 +622,27 @@ export class Board {
   events(handlers: EventHandlers): Subscription {
     let closed = false;
     let attempt = 0;
+    // Which connection the handlers below belong to. One dropped socket can
+    // announce itself twice — `error` on the response and then `error` on the
+    // request is the ordinary shape of a killed server — and each announcement
+    // used to schedule its own reconnect, so a single drop could leave two live
+    // streams delivering every frame twice, forever, with no way back to one.
+    let generation = 0;
     let req: http.ClientRequest | undefined;
     let timer: NodeJS.Timeout | undefined;
+    let stable: NodeJS.Timeout | undefined;
 
-    const reconnect = (detail: string) => {
-      if (closed) {
+    const reconnect = (gen: number, detail: string) => {
+      if (closed || gen !== generation) {
         return;
+      }
+      generation += 1;
+      if (stable) {
+        clearTimeout(stable);
+        stable = undefined;
+      }
+      if (timer) {
+        clearTimeout(timer);
       }
       attempt += 1;
       handlers.onStatus?.(false, detail);
@@ -589,6 +653,7 @@ export class Board {
       if (closed) {
         return;
       }
+      const gen = generation;
       const parser = new SseParser();
       req = http.request(
         {
@@ -601,24 +666,36 @@ export class Board {
         (res) => {
           if (res.statusCode !== 200) {
             res.resume();
-            reconnect(`GET /events answered ${res.statusCode}`);
+            reconnect(gen, `GET /events answered ${res.statusCode}`);
             return;
           }
-          attempt = 0;
           handlers.onStatus?.(true);
+          // The backoff resets when the stream has PROVED itself, not when the
+          // headers arrive. Resetting on the headers meant a port that accepts a
+          // connection and drops it — a board crash-looping, a proxy closing an
+          // idle stream, something else that grabbed the port — reconnected at
+          // the 1s floor for the life of the window and never backed off at all,
+          // which is exactly what backoffDelay exists to prevent. Measured: four
+          // connections in 3.5s, one output-channel line each, indefinitely.
+          stable = setTimeout(() => {
+            attempt = 0;
+          }, STABLE_STREAM_MS);
+          // A ten-second timer must not be what keeps a Node process alive; the
+          // stream's own socket is the thing with a reason to.
+          stable.unref?.();
           res.setEncoding('utf8');
           res.on('data', (chunk: string) => {
             for (const value of parser.push(chunk)) {
               dispatch(classifyFrame(value), handlers);
             }
           });
-          res.on('end', () => reconnect('the board closed the event stream'));
-          res.on('error', (err: Error) => reconnect(err.message));
+          res.on('end', () => reconnect(gen, 'the board closed the event stream'));
+          res.on('error', (err: Error) => reconnect(gen, err.message));
         },
       );
       // No socket timeout: this stream is idle by design between writes, and a
       // timeout would tear down a perfectly healthy connection every N seconds.
-      req.on('error', (err: Error) => reconnect(err.message));
+      req.on('error', (err: Error) => reconnect(gen, err.message));
       req.end();
     };
 
@@ -630,11 +707,23 @@ export class Board {
         if (timer) {
           clearTimeout(timer);
         }
+        if (stable) {
+          clearTimeout(stable);
+        }
         req?.destroy();
       },
     };
   }
 }
+
+/**
+ * How long a stream has to stay up before it counts as a working connection.
+ *
+ * Ten seconds is well past the board's own `retry: 1000` and well short of any
+ * interval a human would notice: a genuine restart still reconnects in about a
+ * second, because the connection it replaced had been up for minutes.
+ */
+const STABLE_STREAM_MS = 10_000;
 
 function dispatch(frame: BoardFrame, handlers: EventHandlers): void {
   switch (frame.kind) {

@@ -1,0 +1,26 @@
+{
+  // `npm: build` is the preLaunchTask for both launch configurations. It is the
+  // one-shot build, not `watch`: a watcher never "finishes", so VS Code would sit
+  // waiting for it unless a problem matcher told it otherwise, and that matcher
+  // ships in a separate extension this repo refuses to depend on. Reload the dev
+  // host window after an edit instead.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "label": "npm: build",
+      "detail": "tsc --noEmit && esbuild → dist/extension.js"
+    },
+    {
+      "type": "npm",
+      "script": "test",
+      "group": "test",
+      "problemMatcher": [],
+      "label": "npm: test",
+      "detail": "node --test out/test/*.test.js"
+    }
+  ]
+}

@@ -1,14 +1,24 @@
 # Handoff — `aboard-vscode`: a VS Code extension that moves the tab strip into the sidebar
 
-**Status:** M1–M5 **implemented, and UNVERIFIED in a real VS Code** (2026-08-26,
-plan-2 item 8; reviewed and repaired the same day — see the end of §10). Every
-pure part is covered by `npm test` (105 assertions, `node --test`, no framework)
-and the HTTP client has been run against a live `aboard serve`; nothing in this repository has been loaded into VS Code — no
-Extension Development Host, no `.vsix`. §11 below is the hand-verification
-checklist and it is entirely unticked. **M6 (install, and running it in a real VS Code)
-is not started because it is GATED ON THE HUMAN** — `§10` of
-`development/planning/plan-2_finish-line.md` in the `aboard` repo, where the human decides
-when. It is not the next thing to pick up; it is a question to ask.
+**Status:** M1–M5 implemented; **M6 has now happened once** (2026-08-26, plan-2 item 15).
+The human ran the extension in a real Extension Development Host against
+`/home/diegos/_dev/ai/borrar`. **Verified once, partially:** activation, discovery of a
+board started AFTER the window was open, the tree listing every tab in document order
+with its id, and the panel rendering the board. **Two defects were found by that run,
+and both are fixed** — the missing status dots and the doubled tab strip; §10.1 below
+says what each actually was, and neither was where it looked. **§10.2 is two more,
+found by reviewing those fixes rather than by running them**: the once-per-board
+`?chrome=` warning fired three times under a slow shell, and the SSE backoff never
+backed off. The rest of §11 is still unticked and is still the only place the
+remaining items can be proven.
+
+Everything else is covered by `npm test` (125 tests, `node --test`, no framework),
+which since item 15 includes an **integration test that spawns a real `aboard`** and
+drives `activate()` against it through a stand-in `vscode` module (`test/vscode-stub.ts`)
+— so the SSE frame, the reload debounce, `onDidChangeTreeData` and the icon path are
+executed rather than reasoned about. No `.vsix` is packaged and none should be without
+the human's word: that is `§10` of `development/planning/plan-2_finish-line.md` in the
+`aboard` repo.
 **Rewritten from:** `handoff-vscode-extension-board-panel.md`, written 2026-08-24 on
 the `board` spike by `agent-research`, stamped against spike commit `7e5a179`, VS Code
 1.133, node 24.15, npm 11.12.
@@ -110,6 +120,13 @@ and calling a paragraph the single source would have been a wish; this is the
 version that breaks when it stops being true. The rename that motivated the
 correction above is exactly the event it is guarding against.
 
+**And a second test, added after the first real run: `test/media.test.ts`.** Reading a
+file as text and finding a hex string in it says nothing about whether a browser will
+draw it, and for a while it did not — both SVGs shipped as malformed XML because the
+comment naming their source contained the token's own two leading hyphens. See §10.1.
+Keep the two tests apart: one asks whether the colour is right, the other whether there
+is a colour at all.
+
 ## 4. The contract it consumes
 
 | call | use |
@@ -120,6 +137,7 @@ correction above is exactly the event it is guarding against.
 | `GET /events` (SSE) | live refresh. Three frame kinds on one stream, told apart by key: `origin` → state changed, refresh the tree; `waiters` → notify count changed; `ui` → the *page's own* code changed, which `aboard` handles itself via its reload mechanism — this extension must ignore that frame kind entirely |
 | `GET /capabilities` | `{type, label, blurb, gestures, …}` per renderer — use for tooltips instead of hardcoding type labels |
 | `POST /aboard.json` | writes: whole document plus `__base` (the **`rev`** just read), `__by: "human"`, `__origin: "vscode"`. `409` means someone got there first: re-read, redo, retry once, then tell the user |
+| `GET /` | the shell the panel frames — and, read once per board, the probe for whether this binary understands `?chrome=` (it stamps `document.body.dataset.chrome`). The manifest has no field for it; see below. |
 | `POST /poke` · `GET /waiters` | the notify channel — a sidebar button and a badge |
 | `#tab=<id>` on the board URL | navigation, see §6 |
 
@@ -165,8 +183,23 @@ aboard-vscode/
     dot-change.svg        --agent #a7adf4
     dot-removal.svg       --danger #ff0066
     activity.svg          the activity-bar icon (currentColor — VS Code tints it)
-  test/                   node --test, no framework, no vscode import anywhere
+  test/                   node --test, no framework
+    vscode-stub.ts        a stand-in `vscode` module. NOT a test file, never an emulator
+    integration.test.ts   spawns a real aboard and drives activate() against it
+    oldboard.test.ts      a board predating ?chrome=, and the one warning it earns
+    media.test.ts         the icon files parse, and the check can be seen failing
 ```
+
+**`test/vscode-stub.ts` is a change of posture and worth defending.** Until item 15 no
+test imported `vscode` at all, which was the point: the pure half was covered and the
+adapter — `extension.ts`, `tree.ts`, `panel.ts` — was reasoned about. The first real
+run then produced a defect that looked exactly like an adapter bug and was not one, and
+there was no way to rule the adapter out except to run it. The stub models only what the
+extension actually depends on: an `EventEmitter` that fires synchronously, a TreeView
+that re-walks `getChildren`/`getTreeItem` when `onDidChangeTreeData` fires, `setContext`,
+and notifications recorded rather than shown. It must not grow into a VS Code emulator —
+the moment it needs a webview it has gone too far, and `panel.ts` is deliberately still
+uncovered for exactly that reason.
 
 **Five source files rather than the four this section originally listed**, and the
 line they are split on is not tidiness: `board.ts`, `model.ts`, `sse.ts`,
@@ -174,7 +207,9 @@ line they are split on is not tidiness: `board.ts`, `model.ts`, `sse.ts`,
 about — the discovery walk, `/health` acceptance, icon precedence, badge count,
 what "dismiss" actually writes, SSE framing, which start command — is reachable
 from `node --test`. `extension.ts`, `tree.ts` and `panel.ts` are the adapter above
-that line and are the part no unit test covers.
+that line. Two of the three are now executed through the stub above — `panel.ts` is
+the one that is still not, deliberately, because covering it would mean a fake
+webview and that is where a stand-in becomes an emulator.
 
 `media/activity.svg` is a third asset this section did not anticipate: a
 `viewsContainers.activitybar` contribution has no icon without one, and the two
@@ -268,6 +303,13 @@ here, because they are what this page depends on:
   call sites are wrapped, so a webview that refuses partitioned storage costs it a
   remembered tab rather than the ability to switch tabs at all. A failure there would
   have looked like this extension's bug, not the board's.
+
+**When the board is too old to understand `?chrome=`.** It ignores the parameter — an
+unknown query parameter is not an error — and draws its own tab strip inside the panel,
+under the sidebar tree. That is what the human saw on the first real run. The extension
+now probes the shell once per board (`Board.supportsChrome()`, `shellSupportsChrome()`
+in `board.ts`) and raises exactly one warning naming the board and its version. Why the
+shell and not `/capabilities`: §10.1.
 
 Panel options that matter: `enableScripts: true`, `retainContextWhenHidden: true`
 (without it, hiding the panel destroys the page and rebuilds it on reveal — the board
@@ -379,9 +421,13 @@ was built and how far it has actually been taken.
   then an error naming what happened.
 - **M6 — install.** `.vsix`, installed locally, used for a week. *Done when:* it
   survives a VS Code restart and a board restart without manual steps.
-  → **Not started, out of scope for plan-2 item 8, and gated on the human** (that plan's
-  §10) — no `vsce`, no `code --install-extension`, no Extension Development Host. The
-  human says when, and §11 below is the checklist to run when they do.
+  → **Started: run once in an Extension Development Host by the human on 2026-08-26.**
+  Still no `vsce` and no `code --install-extension` — the packaging half remains gated
+  on the human (plan-2 §10). What that one run established: the extension activates,
+  discovers a board started after the window was already open (so the instance-file
+  watcher fires), and lists every tab in document order with its id; the panel renders
+  the board. What it broke: the two defects in §10.1. Everything in §11 that is still
+  unticked is still unticked.
 
 Both of the "if it has not landed" allowances this section used to carry are spent:
 `?chrome=` and the `active` message shipped on the `aboard` side on 2026-08-26, so M2
@@ -458,6 +504,103 @@ need a real host are marked.
   (a dropped stream, an ignored instance file) goes to the output channel instead
   of interrupting.
 
+### 10.1 What the first real run found, and why neither was where it looked
+
+Two defects, one run, 2026-08-26. They share the shape everything in §10 shares:
+**this extension's failure mode is silence.** Neither produced an error, a log line,
+or anything on any console. The human found both by looking at the screen, which is
+backwards — the agent that wrote the code is the one still holding the context to fix
+it.
+
+**1. The tree listed every tab and drew no dots**, on a board where every tab carried a
+`touched` mark.
+
+The suspect was the SSE refresh: the marks were written at 13:33 and the extension had
+activated at 13:22, so a tree that never refreshed would look exactly like this. It was
+not that, and the board's own journal says so — the write at 13:33:30 is the write that
+CREATED all fifteen tabs (`before` is empty, and each mark's note is the server's own
+`"new tab"`). The human could only have been looking at a tree that had already
+refreshed. That excluded M3 before a line was changed, which is the argument for
+reading the evidence rather than the likeliest story.
+
+What it actually was: **both dot SVGs were not well-formed XML.** Each opened
+`<!-- --agent, copied from … -->`, and the XML spec forbids `--` inside a comment.
+Chromium — which is what the workbench is — refuses such a document outright instead of
+recovering the way an HTML parser would, so `background-image` resolved to nothing and
+the row had no icon. Confirmed by rendering both the broken and the repaired file in
+Chromium and looking at the picture: `DECODE ERROR` against `decoded 16x16`.
+`media/activity.svg` was unaffected only because its comment happens to contain no
+double hyphen, which is why the activity-bar icon appeared and the dots did not.
+
+The trap is worth keeping: the two CSS custom properties these values are copied from
+are *spelled* `--agent` and `--danger`, so **naming the source accurately is what breaks
+the file**. `test/tokens.test.ts` read both files and passed, because it was looking for
+a hex string in text; nothing had ever asked whether they parse. `test/media.test.ts`
+now does, and it asserts the check itself can fail.
+
+**2. The board's own tab strip showed inside the panel.** Also not this extension:
+`frameSrc()` asked for `?chrome=notabs` correctly, and that board was served by a binary
+built at 00:20 on 2026-08-26 — before `?chrome=` landed at 03:34. An unknown query
+parameter is not an error, so the board ignored it and said nothing.
+
+Fixed by making the extension say it instead: after `/health`, it probes the shell and
+raises one warning per board naming the board and its version. **It probes the shell
+rather than the manifest, and that is a judgement call.** `GET /capabilities` carries
+`app`, `schema`, `capsHash`, `types`, `commands`, `rootFlags` and `routes`, and **none
+of them describes the shell's query parameters**; `capsHash` moves whenever any spec
+moves, so it can say *different* but never *older*, and `/health.version` is
+`git describe --tags --always --dirty`, which on an untagged tree is a commit hash and
+does not order either. The shell stamps `document.body.dataset.chrome` in a classic
+script at the top of `<body>`, and that line IS the feature — testing the feature beats
+testing a proxy for it. If `aboard` ever declares its shell parameters in the manifest,
+move the probe there and delete `shellSupportsChrome`.
+
+**3. The three warnings in the host's console are not ours.** `DEP0040 punycode`,
+`DEP0169 url.parse` and `devbox.json ENOENT`. `dist/extension.js` requires exactly four
+modules — `node:fs`, `node:http`, `node:path`, `vscode` — and there are zero runtime
+dependencies, so there is nothing transitive to blame either. On the machine where they
+were seen, dozens of installed extensions reference `punycode` and dozens use
+`url.parse`, and `devbox.json` belongs to `jetpack-io.devbox`; all extensions share one
+host process, so a deprecation warning names no extension at all. Written into README.md
+under *Troubleshooting: what is not ours* so the next person does not chase them here —
+with the command to count them rather than a number, because the first draft of this
+carried "70" and "49" and neither could be reproduced by anyone re-running the grep.
+A number in a document is a claim with a shelf life; a command is not.
+(One correction to the brief that raised this: the Claude Code extension is **not** the
+source. None of the JavaScript the host loads for it mentions either API. Its bundled
+*native* binaries do contain the strings, which is why an unfiltered grep looks
+incriminating — they are separate processes and cannot raise a `DeprecationWarning` in
+this one. Saying which extension it is would be a guess either way.)
+
+### 10.2 What the review of that work found
+
+Two more, both in the code written to fix the two above, and both the same shape yet
+again: they do the wrong thing quietly, and only under a timing the happy-path test
+does not produce.
+
+- **The `?chrome=` warning fired three times, not once.** `checkChromeContract` set its
+  once-per-board guard on the FAR side of `await board.supportsChrome()`. `reload()`
+  runs on every SSE frame, so an agent writing while the probe was in flight drove a
+  second reload, which passed the guard and started a probe of its own — and a third.
+  `test/oldboard.test.ts` asserted "exactly one" and passed, because its stub answered
+  `GET /` instantly and the window to lose was microseconds wide. Give the stub a 600 ms
+  shell and the count is three, measured. The guard is claimed before the await now, and
+  an unreadable shell is retried three times and then dropped rather than re-fetching a
+  whole page on every write for the life of the window. The board's key is also released
+  when the board goes away, because that is the one moment the binary behind it can
+  change without a Refresh.
+- **The SSE backoff never backed off.** `attempt` was reset to 0 the moment the response
+  HEADERS arrived, so a port that accepts a connection and immediately drops it — a
+  board crash-looping, a proxy closing an idle stream, another process on the derived
+  port — counted as a success every time and reconnected at the 1 s floor indefinitely,
+  with an output-channel line each. Six connections in six seconds, measured. The reset
+  now waits for the stream to stay up for ten seconds, which is the difference between
+  "connected" and "working"; a genuine restart still reconnects in about a second,
+  because the connection it replaced had been up for minutes. The same change made
+  `reconnect` idempotent per connection: one dead socket can announce itself on both the
+  response and the request, and each announcement used to schedule a reconnect of its
+  own, which is two live streams delivering every frame twice with no way back to one.
+
 ### Five things this list called "handled" that were not (found in review)
 
 Each was verified against a real `aboard serve`, not reasoned about. They share a
@@ -507,8 +650,14 @@ origin; this pins the base path too. The invariant it rests on — that every
 
 ## 11. Hand-verification checklist
 
-Nothing below can be asserted headlessly:
+Nothing below can be asserted headlessly. Ticked items were observed by the human on
+2026-08-26; the rest are still open, and the first run did not reach them.
 
+- [x] The extension activates and the tree lists every tab, in `aboard.json` order,
+      each with its id as the description.
+- [x] A board started AFTER the window was already open still appears — so the
+      `**/.aboard/run/instance*.json` watcher fires and discovery re-runs.
+- [x] The board renders inside the panel.
 - [ ] Tab switching does not reload the page (pan a DAG, leave a source editor open,
       come back).
 - [ ] The panel survives being dragged to another editor group, and being hidden and
@@ -516,12 +665,26 @@ Nothing below can be asserted headlessly:
 - [ ] `html` tabs paint inside the panel — the webview console is the last word, not
       a headless run.
 - [ ] Dots appear within a second of an agent's write, and clear from the sidebar.
+      **This is the one to check first next time**: it failed on the first run, and
+      the repair (well-formed SVGs) is asserted by `test/media.test.ts` and by a
+      Chromium render, but nobody has yet seen a dot in a real sidebar.
+- [ ] The tab strip does NOT appear inside the panel, on a current binary — and on an
+      old one, exactly one warning says why.
 - [ ] A removal request shows red and both answers do what they say.
 - [ ] Notify lights only when a session is genuinely parked on `aboard wait`, and
       pressing it releases that session.
 - [ ] Board and plain browser open simultaneously, disagreeing about chrome,
       agreeing about content, each on its own active tab.
+- [ ] The stream survives a board restart, and a board that will NOT come back stops
+      being retried every second (kill `aboard serve` and watch the Aboard output
+      channel: the reconnect notices should space out, not tick once a second).
 - [ ] Restarting the `aboard` server on the same root while the panel is open: the
       page reloads itself (its own self-heal mechanism, ported from the spike's
       `reload.go`), the tree stays alive, no stale `app.css`.
 - [ ] A forced `409` (write from the browser mid-edit) warns rather than clobbers.
+
+**Rebuild before pressing F5, and reload the dev-host window after an edit.**
+`.vscode/launch.json` runs `npm: build` as a preLaunchTask, so the first is handled;
+the second is not, because the build is one-shot rather than a watcher (a watcher never
+"finishes" and VS Code would sit waiting for it). A dev host left open across an edit is
+running the previous bundle, silently — the same class of mistake as everything in §10.1.

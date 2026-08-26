@@ -138,12 +138,18 @@ export function referenceFor(boardUrl: string, tabId: string, nodeId?: string): 
 /**
  * The panel's iframe src.
  *
- * `?chrome=notabs` hides the board's own tab strip, which is §4 of
- * `handoff-board-for-vscode-panel.md` and has NOT landed on the aboard side yet.
- * It is sent anyway: an unknown query parameter is ignored by every version of
- * the shell, so the cost today is nothing and the day it lands this extension
- * needs no change. Until then the panel shows two tab strips and is otherwise
- * fully functional.
+ * `?chrome=notabs` hides the board's own tab strip — §4 of
+ * `handoff-board-for-vscode-panel.md`, landed on the aboard side on 2026-08-26.
+ * A board OLDER than that ignores the parameter, because an unknown query
+ * parameter is not an error, and then the panel shows two tab strips: fully
+ * functional and visibly wrong, with nothing anywhere saying why. That is what
+ * the first real run of this extension looked at. Nothing here changes for it —
+ * the URL was always right — but `Board.supportsChrome()` now probes for it and
+ * the human gets one sentence instead of a mystery.
+ *
+ * The exact shape is `<base>?chrome=notabs#tab=<id>&r=<n>` and it is asserted as
+ * a whole string in test/model.test.ts, because "is this URL wrong?" was the
+ * first question that run raised and there was nothing to answer it with.
  *
  * Every value this returns starts with the no-tab form, and `media/panel.html`
  * relies on that: it accepts a `goto` only for a src beginning with the one the

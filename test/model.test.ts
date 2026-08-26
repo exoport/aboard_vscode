@@ -158,6 +158,39 @@ describe('frameSrc', () => {
   it('has no fragment at all before a tab is chosen', () => {
     assert.equal(frameSrc('http://127.0.0.1:41234/', undefined, 0), 'http://127.0.0.1:41234/?chrome=notabs');
   });
+
+  // Asserted as a whole string, not as three separate regexes. The panel's first
+  // real run showed the board's own tab strip inside it, and the first suspicion
+  // was that this function had built the URL wrong — it had not, but nothing here
+  // pinned the exact shape, so the suspicion cost a reading of the file. It is
+  // pinned now: `<base>?chrome=notabs#tab=<id>&r=<n>`, in that order.
+  it('is exactly ?chrome=notabs#tab=<id>&r=<n>', () => {
+    assert.equal(frameSrc('http://127.0.0.1:41234/', 'bb13', 7), 'http://127.0.0.1:41234/?chrome=notabs#tab=bb13&r=7');
+  });
+
+  it('keeps a base path, and joins with & when the URL already has a query', () => {
+    assert.equal(
+      frameSrc('http://127.0.0.1:41234/prefix/', 'bb13', 1),
+      'http://127.0.0.1:41234/prefix/?chrome=notabs#tab=bb13&r=1',
+    );
+    assert.equal(
+      frameSrc('http://127.0.0.1:41234/?nosse=1', 'bb13', 1),
+      'http://127.0.0.1:41234/?nosse=1&chrome=notabs#tab=bb13&r=1',
+    );
+  });
+
+  it('escapes the tab id rather than pasting it into the fragment', () => {
+    assert.equal(frameSrc('http://127.0.0.1:41234/', 'bb 1&r=9', 2), 'http://127.0.0.1:41234/?chrome=notabs#tab=bb%201%26r%3D9&r=2');
+  });
+
+  // media/panel.html accepts a `goto` only for a src that starts with the one the
+  // frame was rendered with, and the frame is rendered with frameSrc(url, undefined, 0).
+  it('every value starts with the no-tab form panel.html pins', () => {
+    const base = frameSrc('http://127.0.0.1:41234/', undefined, 0);
+    for (const id of ['bb1', 'bb999', 'weird id']) {
+      assert.ok(frameSrc('http://127.0.0.1:41234/', id, 3).startsWith(base));
+    }
+  });
 });
 
 describe('the edits', () => {
