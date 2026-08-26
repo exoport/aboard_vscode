@@ -677,8 +677,11 @@ is not — a full tick there would claim more than anybody has seen.
 - [x] The tab strip does NOT appear inside the panel on a current binary — observed
       2026-08-26 against `aboard de7773f`. The old-binary warning itself is still
       unobserved in a real host (asserted by `test/oldboard.test.ts`).
-- [~] A removal request shows red and both answers do what they say. **The answers
-      are proven headlessly** (`test/integration.test.ts`, 2026-08-26): against a real
+- [x] A removal request shows red and both answers do what they say. **Observed by
+      the human on 2026-08-26**: the row showed the red dot, and pressing Remove in the
+      board's banner inside the panel (the board's own dialog, after the aboard fix)
+      deleted the tab and the sidebar updated on its own. **The answers were first
+      proven headlessly** (`test/integration.test.ts`, 2026-08-26): against a real
       spawned board, an agent's write requests a removal, `approveRemoval` written as
       `__by: "human"` makes the tab GONE from `GET /aboard.json`, `denyRemoval` leaves
       the tab with its request cleared, and a second deny is skipped rather than posted.
@@ -686,8 +689,8 @@ is not — a full tick there would claim more than anybody has seen.
       tab RESTORED with a `pendingRemoval` (guarantee 1), so a test that only checks what
       the edit does to a JSON object proves nothing about what the board does with it —
       and a wrong `__by` fails it, which was verified by changing it and watching both
-      cases go red. **What is still unobserved in a real host**: that the row shows RED,
-      and that the context-menu items are reachable and wired to these two commands. The
+      cases go red. **Still unobserved in a real host**: the sidebar's own Approve/Deny
+      context-menu items (the human answered through the board's banner). The
       board's own answer to the same question — the removal banner's Remove button —
       was DEAD in the panel until 2026-08-26 (it called `window.confirm`, which a webview
       swallows); that is fixed in the aboard repo, not here.
