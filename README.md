@@ -26,7 +26,7 @@ does, something here is wrong.
 > single run turned up were invisible to the suite — which is the measure of how much
 > the suite can be trusted to stand in for the real thing.
 >
-> The rest is covered by `npm test` (125 tests, `node --test`, no framework), which
+> The rest is covered by `npm test` (the whole suite, `node --test`, no framework), which
 > now includes an **integration test that spawns a real `aboard`** and drives
 > `activate()` against it through a stand-in `vscode` module — so the tree refresh,
 > the SSE frame, the debounce and the icon path are executed rather than reasoned

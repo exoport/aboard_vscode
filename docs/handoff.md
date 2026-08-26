@@ -650,8 +650,11 @@ origin; this pins the base path too. The invariant it rests on — that every
 
 ## 11. Hand-verification checklist
 
-Nothing below can be asserted headlessly. Ticked items were observed by the human on
-2026-08-26; the rest are still open, and the first run did not reach them.
+Nothing below can be asserted headlessly **in a real host**. `[x]` was observed by the
+human on 2026-08-26; `[ ]` is still open, and the first runs did not reach it. `[~]` is
+the third state this list needed once the integration test existed: the part that CAN be
+driven against a real board is proven, and the part that needs a human looking at VS Code
+is not — a full tick there would claim more than anybody has seen.
 
 - [x] The extension activates and the tree lists every tab, in `aboard.json` order,
       each with its id as the description.
@@ -669,12 +672,25 @@ Nothing below can be asserted headlessly. Ticked items were observed by the huma
       removal request, and after the stream fix (`cff655a`) a new dot on
       Coordination arrived with no Refresh. The first two runs needed Refresh —
       first the malformed SVGs, then Node 24's inspector killing the stream on
-      every string chunk under F5. Clearing from the sidebar (Dismiss) is still
-      unobserved.
+      every string chunk under F5. Clearing from the sidebar (Dismiss) was
+      observed working in the same session on 2026-08-26.
 - [x] The tab strip does NOT appear inside the panel on a current binary — observed
       2026-08-26 against `aboard de7773f`. The old-binary warning itself is still
       unobserved in a real host (asserted by `test/oldboard.test.ts`).
-- [ ] A removal request shows red and both answers do what they say.
+- [~] A removal request shows red and both answers do what they say. **The answers
+      are proven headlessly** (`test/integration.test.ts`, 2026-08-26): against a real
+      spawned board, an agent's write requests a removal, `approveRemoval` written as
+      `__by: "human"` makes the tab GONE from `GET /aboard.json`, `denyRemoval` leaves
+      the tab with its request cleared, and a second deny is skipped rather than posted.
+      Deliberately a server test and not a unit one: the same edit from an agent gets the
+      tab RESTORED with a `pendingRemoval` (guarantee 1), so a test that only checks what
+      the edit does to a JSON object proves nothing about what the board does with it —
+      and a wrong `__by` fails it, which was verified by changing it and watching both
+      cases go red. **What is still unobserved in a real host**: that the row shows RED,
+      and that the context-menu items are reachable and wired to these two commands. The
+      board's own answer to the same question — the removal banner's Remove button —
+      was DEAD in the panel until 2026-08-26 (it called `window.confirm`, which a webview
+      swallows); that is fixed in the aboard repo, not here.
 - [ ] Notify lights only when a session is genuinely parked on `aboard wait`, and
       pressing it releases that session.
 - [ ] Board and plain browser open simultaneously, disagreeing about chrome,

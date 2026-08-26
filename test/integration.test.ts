@@ -13,7 +13,16 @@
 //   3. the whole vscode-side chain — `activate()`, the SSE frame, the debounce,
 //      `onDidChangeTreeData`, `getTreeItem` — ending in a row whose `iconPath`
 //      names a file that exists AND parses;
-//   4. the `?chrome=` probe answering `true` against a current binary.
+//   4. the `?chrome=` probe answering `true` against a current binary;
+//   5. `approveRemoval` and `denyRemoval` answered against a REAL removal request
+//      — the two writes in this repo that had never touched a server.
+//
+// (5) is here because the board is the half that enforces it. `approveRemoval`
+// filters a tab out of a document, and an agent doing that gets the tab RESTORED
+// with a `pendingRemoval` instead (guarantee 1); the same edit from a human is a
+// deletion. Nothing in this repo can tell those two apart — the difference is a
+// `__by` the server reads — so a unit test asserting the edit function does the
+// right thing to a JSON object proves nothing about what the board does with it.
 //
 // (3) is the one that matters most. The missing dots on 2026-08-26 looked exactly
 // like a tree that never refreshed, and this is the test that says it does — so
@@ -155,6 +164,34 @@ async function writeAsAgent(board: Board, edit: (doc: Doc) => void, by = 'agent-
   assert.equal(res.status, 200, `the agent write was refused: ${res.status} ${res.body}`);
 }
 
+/**
+ * Make a tab as an agent, then ask — as that agent — for it to be removed.
+ *
+ * The request is made by DELETING the tab from an agent's write, which is the
+ * only way a real one is ever made: the server restores the tab and attaches a
+ * `pendingRemoval`. Planting the field directly would test the extension against
+ * a shape no board ever produces.
+ */
+async function requestRemovalOfAScratchTab(board: Board, name: string): Promise<string> {
+  const doc = await board.state();
+  const next = typeof doc.nextId === 'number' ? doc.nextId : 1;
+  const id = `bb${next}`;
+  await writeAsAgent(board, (d) => {
+    d.nextId = next + 1;
+    d.tabs.push({ id, name, type: 'notes', note: 'made by the integration test', state: { text: 'scratch\n' } });
+  });
+
+  await writeAsAgent(board, (d) => {
+    d.tabs = d.tabs.filter((t) => t.id !== id);
+  });
+
+  const after = await board.state();
+  const tab = after.tabs.find((t) => t.id === id);
+  assert.ok(tab, `the board let an agent delete ${id} outright — guarantee 1 is gone`);
+  assert.equal(typeof tab.pendingRemoval, 'object', `${id} carries no pendingRemoval`);
+  return id;
+}
+
 describe('against a live aboard', { skip, timeout: 90_000 }, () => {
   before(startBoard);
   after(stopBoard);
@@ -282,5 +319,54 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
       }
       vscode.workspace.workspaceFolders = [];
     }
+  });
+
+  it('approves a removal request, and the tab is gone from the board', async () => {
+    const { findAllInstances, verify } = require('../src/board') as typeof import('../src/board');
+    const { approveRemoval } = require('../src/model') as typeof import('../src/model');
+
+    const { board } = await verify(findAllInstances([projectDir])[0]!);
+    assert.ok(board);
+    const id = await requestRemovalOfAScratchTab(board, 'Approve me');
+
+    const result = await board.write(approveRemoval(id));
+    assert.equal(result.skipped, undefined, 'the edit reported nothing to do');
+
+    // Read it back off the server rather than trusting the reply: the whole
+    // point is that the SERVER accepted a deletion from a human, and the reply
+    // is this repo's own description of what it sent.
+    const after = await board.state();
+    assert.equal(
+      after.tabs.some((t) => t.id === id),
+      false,
+      `${id} is still on the board after the removal was approved`,
+    );
+  });
+
+  it('denies a removal request, and the tab stays with the request cleared', async () => {
+    const { findAllInstances, verify } = require('../src/board') as typeof import('../src/board');
+    const { denyRemoval } = require('../src/model') as typeof import('../src/model');
+
+    const { board } = await verify(findAllInstances([projectDir])[0]!);
+    assert.ok(board);
+    const id = await requestRemovalOfAScratchTab(board, 'Deny me');
+
+    const result = await board.write(denyRemoval(id));
+    assert.equal(result.skipped, undefined, 'the edit reported nothing to do');
+
+    const after = await board.state();
+    const tab = after.tabs.find((t) => t.id === id);
+    assert.ok(tab, `denying the request removed ${id} anyway`);
+    assert.equal(tab.name, 'Deny me', 'the tab came back as something else');
+    assert.equal(
+      tab.pendingRemoval === undefined || tab.pendingRemoval === null,
+      true,
+      'the removal request is still on the tab after being denied',
+    );
+
+    // Denying twice is a no-op the extension must not turn into a write: there
+    // is no request left to clear, and `write` reports it rather than posting.
+    const again = await board.write(denyRemoval(id));
+    assert.equal(again.skipped, true, 'denying an already-answered request posted anyway');
   });
 });
