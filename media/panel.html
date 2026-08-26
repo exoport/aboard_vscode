@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Nothing loads but the frame. `default-src 'none'` means no images, no
+      fonts, no fetch; `frame-src` is exactly the board's own origins (loopback,
+      plus whatever `asExternalUri` produced on a remote); the script is the
+      inline bridge below and nothing else can run.
+      Placeholders are substituted in src/panel.ts.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="__CSP__" />
+    <title>Aboard</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background: var(--vscode-editor-background);
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe id="frame" src="__SRC__" title="Aboard"></iframe>
+    <script nonce="__NONCE__">
+      const vscode = acquireVsCodeApi();
+      const frame = document.getElementById('frame');
+      // Every src this page will ever be handed is built by frameSrc() in
+      // src/model.ts from the same board URL, so they all start with the one
+      // the frame was rendered with. Checked rather than assumed: an html tab
+      // inside the board is a sandboxed frame that can reach `window.top`, and
+      // this branch is the only thing on the page that navigates anything. The
+      // CSP already pins the ORIGIN; this pins the base path too, and the
+      // invariant it relies on is asserted in test/model.test.ts.
+      const ALLOWED = frame.getAttribute('src');
+
+      window.addEventListener('message', (e) => {
+        if (e.source === frame.contentWindow) {
+          // From the board. The frame is cross-origin by design, so the sender
+          // is authenticated by SOURCE WINDOW, never by origin. The envelope key
+          // is __aboard — the bridge was renamed outright, with no alias.
+          if (e.data && e.data.__aboard === 'active' && typeof e.data.tab === 'string') {
+            vscode.postMessage({ type: 'active', tab: e.data.tab });
+          }
+          return;
+        }
+        // From the extension host. `src` already carries the changing `r=` nonce
+        // (built in src/model.ts, where it can be tested): the board does not
+        // write the hash back when the human switches tabs inside it, so without
+        // a changing value there is no hashchange and the click does nothing.
+        if (e.data && e.data.type === 'goto' && typeof e.data.src === 'string' && e.data.src.indexOf(ALLOWED) === 0) {
+          frame.src = e.data.src;
+        }
+      });
+
+      vscode.postMessage({ type: 'ready' });
+    </script>
+  </body>
+</html>

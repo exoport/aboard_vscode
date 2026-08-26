@@ -1,0 +1,5 @@
+<!-- --danger, copied from pkg/aboard/web/app.css in the aboard repo.
+     The value lives in src/tokens.ts; a unit test asserts this file agrees with it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <circle cx="8" cy="8" r="4" fill="#ff0066"/>
+</svg>

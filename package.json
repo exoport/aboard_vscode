@@ -1,0 +1,244 @@
+{
+  "name": "aboard-vscode",
+  "displayName": "Aboard Panel",
+  "description": "A native sidebar tree of an aboard project's tabs, with the board itself in a webview panel.",
+  "version": "0.1.0",
+  "publisher": "exoport",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/exoport/aboard_vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/.aboard/**",
+    "onCommand:aboard.open",
+    "onCommand:aboard.refresh",
+    "onCommand:aboard.start",
+    "onCommand:aboard.notify"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aboard",
+          "title": "Aboard",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "aboard": [
+        {
+          "id": "aboard.tabs",
+          "name": "Tabs",
+          "contextualTitle": "Aboard"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "aboard.open",
+        "title": "Open Board Panel",
+        "category": "Aboard",
+        "icon": "$(window)"
+      },
+      {
+        "command": "aboard.refresh",
+        "title": "Refresh",
+        "category": "Aboard",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "aboard.start",
+        "title": "Start the Board",
+        "category": "Aboard",
+        "icon": "$(play)"
+      },
+      {
+        "command": "aboard.notify",
+        "title": "Notify Waiting Session",
+        "category": "Aboard",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "aboard.openTab",
+        "title": "Show Tab in Panel",
+        "category": "Aboard"
+      },
+      {
+        "command": "aboard.dismissChange",
+        "title": "Dismiss Change",
+        "category": "Aboard",
+        "icon": "$(check)"
+      },
+      {
+        "command": "aboard.approveRemoval",
+        "title": "Approve Removal",
+        "category": "Aboard",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "aboard.denyRemoval",
+        "title": "Deny Removal",
+        "category": "Aboard",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "aboard.rename",
+        "title": "Rename Tab",
+        "category": "Aboard",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "aboard.setNote",
+        "title": "Set Note",
+        "category": "Aboard",
+        "icon": "$(note)"
+      },
+      {
+        "command": "aboard.copyId",
+        "title": "Copy Id",
+        "category": "Aboard"
+      },
+      {
+        "command": "aboard.copyReference",
+        "title": "Copy Link to This Tab",
+        "category": "Aboard"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "aboard.openTab",
+          "when": "false"
+        },
+        {
+          "command": "aboard.dismissChange",
+          "when": "false"
+        },
+        {
+          "command": "aboard.approveRemoval",
+          "when": "false"
+        },
+        {
+          "command": "aboard.denyRemoval",
+          "when": "false"
+        },
+        {
+          "command": "aboard.rename",
+          "when": "false"
+        },
+        {
+          "command": "aboard.setNote",
+          "when": "false"
+        },
+        {
+          "command": "aboard.copyId",
+          "when": "false"
+        },
+        {
+          "command": "aboard.copyReference",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "aboard.open",
+          "when": "view == aboard.tabs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aboard.notify",
+          "when": "view == aboard.tabs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aboard.refresh",
+          "when": "view == aboard.tabs",
+          "group": "navigation@3"
+        },
+        {
+          "command": "aboard.start",
+          "when": "view == aboard.tabs",
+          "group": "1_run@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "aboard.dismissChange",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b.*\\btouched\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "aboard.approveRemoval",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b.*\\bremoval\\b/",
+          "group": "1_removal@1"
+        },
+        {
+          "command": "aboard.denyRemoval",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b.*\\bremoval\\b/",
+          "group": "1_removal@2"
+        },
+        {
+          "command": "aboard.dismissChange",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b.*\\btouched\\b/",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "aboard.rename",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "aboard.setNote",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b/",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "aboard.copyId",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b/",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "aboard.copyReference",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b/",
+          "group": "3_copy@2"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "aboard.tabs",
+        "when": "!aboard.hasBoard && aboard.hasProject",
+        "contents": "This project has an `.aboard/` directory, but no board is answering.\n[Start the Board](command:aboard.start)\nThe extension picks `aboard serve` or `ape aboard serve` by what is on your PATH."
+      },
+      {
+        "view": "aboard.tabs",
+        "when": "!aboard.hasBoard && !aboard.hasProject",
+        "contents": "No `.aboard/` project was found in this workspace.\nRun `aboard init` in the folder you want a board for, then start it.\n[Start the Board](command:aboard.start)"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "tsc -p tsconfig.test.json",
+    "test": "node --test out/test/*.test.js",
+    "vscode:prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.25.4",
+    "typescript": "^5.8.3"
+  }
+}

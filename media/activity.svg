@@ -1,0 +1,9 @@
+<!-- The activity-bar icon. Monochrome and currentColor by contract: VS Code
+     tints activity-bar icons itself, so a board token here would be overridden
+     and then look wrong in a light theme. Not a copy of anything in aboard. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+  <rect x="2.8" y="4.4" width="18.4" height="15.2" rx="2"/>
+  <path d="M2.8 9.2h18.4"/>
+  <path d="M8.6 9.2V4.4"/>
+  <path d="M6 13h5.5M6 16.2h8.4"/>
+</svg>
