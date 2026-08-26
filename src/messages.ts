@@ -14,15 +14,11 @@ export type FromWebview = { type: 'active'; tab: string } | { type: 'ready' };
 
 /**
  * The board announces its own tab switches ([ ], 1–9, and its choice on load) as
- * `{__aboard: 'active', tab}` — §5 of `handoff-board-for-vscode-panel.md`, which
- * has NOT landed on the aboard side yet. The webview authenticates it by
- * `e.source` (the frame is cross-origin by design, so the origin is not the
- * check) and forwards it in this shape.
- *
- * Until that message ships the tree highlight only follows clicks that started
- * in the tree, and drifts when the human presses `]` inside the panel. That was
- * accepted rather than blocking on the other repo; this parser is what makes it
- * start working the day it lands, with no change here.
+ * `{__aboard: 'active', tab}` — §5 of `handoff-board-for-vscode-panel.md`, landed
+ * on the aboard side (plan-2 item 7). It is sent when the active tab CHANGES, not
+ * on every repaint, so a receiver may act on each message it gets. The webview
+ * authenticates it by `e.source` (the frame is cross-origin by design, so the
+ * origin is not the check) and forwards it in this shape.
  */
 export function parseWebviewMessage(raw: unknown): FromWebview | undefined {
   if (typeof raw !== 'object' || raw === null) {

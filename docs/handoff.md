@@ -242,13 +242,29 @@ window.addEventListener('message', (e) => {
 });
 ```
 
-`?chrome=notabs` and the `{__aboard:'active', tab}` message are both build-queue
-items on the `aboard` side (`handoff-board-for-vscode-panel.md` §4–§5) — **not yet
-shipped as of this writing**. Until `?chrome=` lands, the panel shows two tab strips
-(the board's own, plus this extension's tree) and is otherwise fully functional. Until
-the `active` message lands, the tree highlight only updates on a click originating
-from the tree itself, and drifts whenever the human uses `[`, `]`, or `1`–`9` inside
-the panel.
+`?chrome=notabs` and the `{__aboard:'active', tab}` message have **both landed on the
+`aboard` side** (`handoff-board-for-vscode-panel.md` §4–§5, shipped 2026-08-26 as
+plan-2 item 7), so what this section describes is the contract as it now is rather
+than one waiting on another repo. Two details of the landed version are worth knowing
+here, because they are what this page depends on:
+
+- `?chrome=notabs` hides the tab BUTTON LIST and nothing else. The topbar (notify
+  button, version badge), the `+` that opens the new-tab dialog and the tab note all
+  stay — deliberately, so a human working inside this panel is not stranded and this
+  extension never has to reimplement the board's own dialog. `?chrome=none` drops the
+  whole head; an unrecognised value falls back to `full`.
+- The `active` message is posted whenever the active tab CHANGES, including the tab
+  the board picks for itself at load. So the tree learns what the panel is showing
+  without the human clicking anything, which is the case the highlight used to be
+  blind to. A change, not a redraw: the board re-activates the current tab on every
+  repaint and repaints on every write that reaches it, and it deliberately says
+  nothing when the id has not moved — so `revealTab`'s `reveal(node, { select: true })`
+  cannot be fired at the human by an agent writing to a tab they are not looking at.
+- The third item in that batch (`handoff-board-for-vscode-panel.md` §6) landed with
+  them and is invisible from here, which is the point: the board's two `localStorage`
+  call sites are wrapped, so a webview that refuses partitioned storage costs it a
+  remembered tab rather than the ability to switch tabs at all. A failure there would
+  have looked like this extension's bug, not the board's.
 
 Panel options that matter: `enableScripts: true`, `retainContextWhenHidden: true`
 (without it, hiding the panel destroys the page and rebuilds it on reveal — the board
@@ -256,16 +272,23 @@ rehydrates from `.aboard/aboard.json`, but the human's zoom, scroll and drafts d
 not), and `portMapping: [{ webviewPort: port, extensionHostPort: port }]` so the same
 code works over Remote SSH and Codespaces (paired with `vscode.env.asExternalUri`).
 
-**Base path — the open question is answered, and it is `base`.** If the discovered
+**Base path — the open question is answered upstream too, and it is `base`.** If the discovered
 instance was started with `aboard serve --base-path /prefix` (plan-1 decision 7),
 every request this extension makes — including the iframe's own `src` — needs that
 prefix too. `GET /health` DOES expose it: the field is `base` on the instance
-record (`Instance.Base` in `pkg/aboard/server.go`, listed in `http-api.md`'s
-`/health` row), `omitempty`, so it is simply absent in the common case where no
-`--base-path` was given. Every URL this extension builds goes through
+record (`Instance.Base` in `pkg/aboard/server.go`, and `http-api.md`'s `/health`
+section now spells out what it means), `omitempty`, so it is simply absent in the
+common case where no `--base-path` was given. Nothing was added upstream for this —
+the field had been there since the port; it was only undocumented, which for a client
+author is the same thing as absent. Every URL this extension builds goes through
 `basePathOf()`, which normalises to `""` or `"/prefix"`. It also reads `basePath`
 as a fallback, because that is the name plan-2's brief expected the field to land
 under and reading both costs one `??`.
+
+The one ordering trap: a prefixed board answers `/health` only at `<base>/health`, so
+the prefix cannot be discovered from `/health` itself. `.aboard/run/instance.json`
+carries the same field, and this extension reads it there first — which is what the
+discovery walk already does.
 
 Webview CSP: `default-src 'none'; frame-src http://localhost:<port>
 http://127.0.0.1:<port>; script-src 'nonce-<nonce>'; style-src 'unsafe-inline'`.
@@ -334,13 +357,15 @@ was built and how far it has actually been taken.
   frames (the POST broadcast and the file watcher's).
 - **M4 — dots.** Icons, tooltips from `/capabilities`, badge, `active` message
   handling. *Done when:* an agent touches a tab and the row grows a periwinkle dot;
-  pressing `]` inside the board moves the tree highlight (once `handoff-board-for-
-  vscode-panel.md` §5 has landed on the `aboard` side).
+  pressing `]` inside the board moves the tree highlight.
   → **Built.** An agent write against the live board produced exactly the expected
   models: a change dot on the renamed tab, a removal dot on the dropped one, and
   removal winning on the tab that had both. The `active` message is parsed and
-  wired to `reveal`, and §5 has NOT landed on the aboard side, so the drift is
-  still there — accepted, as this section already allowed.
+  wired to `reveal`, and **§5 has now landed on the aboard side** (2026-08-26), so
+  the board really does post `{__aboard:'active', tab}` on `[`, `]`, `1`–`9` and at
+  load. The drift this milestone allowed for is gone; what is left is the same
+  thing left everywhere else here — nobody has watched the highlight move in a
+  running VS Code.
 - **M5 — act.** Dismiss, removal answers, rename, note, notify; `409` retry.
   *Done when:* dismissing from the sidebar clears the dot in a plain browser looking
   at the same board, and a forced conflict surfaces a warning instead of clobbering.
@@ -354,9 +379,14 @@ was built and how far it has actually been taken.
   → **Not started, and out of scope for plan-2 item 8** — no `vsce`, no
   `code --install-extension`.
 
-M2 still works with two tab strips if `?chrome=` has not landed. M4's highlight-drift
-half can be dropped if the `active` message has not landed — accept a highlight that
-drifts on `[`, `]`, `1`–`9` rather than blocking the milestone on the other repo.
+Both of the "if it has not landed" allowances this section used to carry are spent:
+`?chrome=` and the `active` message shipped on the `aboard` side on 2026-08-26, so M2
+no longer has to tolerate two tab strips and M4 no longer has to tolerate a drifting
+highlight. Neither was ever a change to this repo — `frameSrc()` has always asked for
+`?chrome=notabs`, and `media/panel.html` has always listened for `__aboard === 'active'`
+— so nothing here needs editing to take advantage of them. What is unproven is
+unchanged and is the same sentence as before: nothing has been observed in a running
+VS Code.
 
 ## 9. Install, and the publishing ladder
 
