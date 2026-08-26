@@ -16,7 +16,11 @@
 //     `getChildren`/`getTreeItem` again — which is the behaviour the whole "does
 //     the tree refresh on an SSE frame" question is about;
 //   * `commands.executeCommand('setContext', k, v)` records the context key;
-//   * notifications are recorded rather than shown.
+//   * notifications are recorded rather than shown;
+//   * the clipboard records what was written to it;
+//   * a rendered row keeps the NODE it was drawn from, because that object is
+//     exactly what VS Code hands a `view/item/context` command as its argument —
+//     so a test can press a context-menu item the way a human does.
 //
 // Anything a test wants to look at afterwards is on `__probe`. This file is NOT
 // named `*.test.ts`, so `node --test out/test/*.test.js` does not run it.
@@ -118,6 +122,8 @@ export interface RenderedRow {
   /** A codicon id, for the rows that use one instead of a file. */
   themeIcon?: string;
   nested: boolean;
+  /** The provider's own node for this row: what a context-menu command receives. */
+  node: unknown;
 }
 
 export const probe = {
@@ -128,6 +134,10 @@ export const probe = {
   rows: [] as RenderedRow[],
   renders: 0,
   badge: undefined as { value: number; tooltip?: string } | undefined,
+  /** Everything `env.clipboard.writeText` was given, newest last. */
+  clipboard: [] as string[],
+  /** The status-bar item as it currently reads, or undefined while hidden. */
+  status: undefined as { text: string; tooltip: string } | undefined,
   reset(): void {
     this.log = [];
     this.notifications = [];
@@ -136,6 +146,8 @@ export const probe = {
     this.rows = [];
     this.renders = 0;
     this.badge = undefined;
+    this.clipboard = [];
+    this.status = undefined;
   },
 };
 
@@ -178,6 +190,7 @@ function makeTreeView(id: string, options: any): any {
         iconPath: icon.file,
         themeIcon: icon.theme,
         nested,
+        node,
       });
       if (item.collapsibleState === TreeItemCollapsibleState.Expanded) {
         for (const child of provider.getChildren(node) ?? []) {
@@ -218,8 +231,12 @@ export const window = {
     text: '',
     tooltip: '',
     command: '',
-    show() {},
-    hide() {},
+    show(this: { text: string; tooltip: string }) {
+      probe.status = { text: this.text, tooltip: this.tooltip };
+    },
+    hide() {
+      probe.status = undefined;
+    },
     dispose() {},
   }),
   showInformationMessage: (message: string) => {
@@ -269,6 +286,10 @@ export const commands = {
 };
 
 export const env = {
-  clipboard: { writeText: async () => {} },
+  clipboard: {
+    writeText: async (value: string) => {
+      probe.clipboard.push(value);
+    },
+  },
   asExternalUri: async (uri: Uri) => uri,
 };

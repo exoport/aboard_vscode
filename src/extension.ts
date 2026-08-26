@@ -23,10 +23,12 @@ import {
   approveRemoval,
   denyRemoval,
   dismissChange,
-  referenceFor,
+  linkFor,
+  referenceText,
   renameTab,
   schemaMismatch,
   setNote,
+  UNNAMED,
 } from './model';
 import { BoardPanel } from './panel';
 import { BoardTreeProvider, type BoardEntry, type Node } from './tree';
@@ -54,6 +56,8 @@ class Controller implements vscode.Disposable {
   private panels = new Map<string, BoardPanel>();
   private caps = new Map<string, Capabilities>();
   private waiting = new Map<string, number>();
+  /** Last value pushed to the `aboard.waiting` context key, so it is set on change only. */
+  private waitingContext: boolean | undefined;
   private warnedSchema = new Set<string>();
   /**
    * Boards whose `?chrome=` answer is settled, or being asked for right now.
@@ -168,7 +172,17 @@ class Controller implements vscode.Disposable {
       onStatus: (connected, detail) => {
         if (!connected) {
           this.log(`event stream for ${board.title} dropped: ${detail ?? 'unknown'} — reconnecting`);
+          return;
         }
+        // Back up. Every frame sent while the stream was down is GONE — the
+        // server fans out with a non-blocking send and a `default:` (`fanout`
+        // in pkg/aboard/server.go), so a client that was not there, or was not
+        // keeping up, is simply skipped. The tree survives that because a
+        // `state` frame is followed by a re-read of the whole document; the
+        // waiter count does not, because a session parking during the gap
+        // writes nothing and produces no state frame at all. So the count is
+        // the one thing here that has to be re-asked for after a reconnect.
+        void this.refreshWaiters(board);
       },
     });
   }
@@ -212,11 +226,7 @@ class Controller implements vscode.Disposable {
       // that parked on `aboard wait` before this window opened was invisible:
       // the status bar said "nothing to notify" while somebody was blocked on
       // exactly that button. Seeded here, then kept current by the frames.
-      try {
-        this.waiting.set(board.instanceFile, (await board.waiters()).waiting);
-      } catch (err) {
-        this.log(`${board.title}: could not read the waiter count: ${messageOf(err)}`);
-      }
+      await this.refreshWaiters(board);
       const drift = schemaMismatch(entry.doc, entry.caps);
       if (drift) {
         // The row says so for as long as it is true; the notification fires
@@ -301,6 +311,13 @@ class Controller implements vscode.Disposable {
   }
 
   private render(): void {
+    if (this.disposed) {
+      // A reload in flight when the window closed, or when a test tore this
+      // controller down: it still has an `entries` array and would happily
+      // push a context key and a status bar for a board nobody is watching any
+      // more, over the top of whatever replaced it.
+      return;
+    }
     this.provider.setEntries(this.entries);
     const badge = this.provider.badge;
     this.view.badge = badge > 0 ? { value: badge, tooltip: `${badge} tab${badge === 1 ? '' : 's'} changed` } : undefined;
@@ -309,6 +326,9 @@ class Controller implements vscode.Disposable {
 
   private renderStatus(): void {
     if (this.entries.length === 0) {
+      // No board, nobody waiting. The key has to come back OFF here or a lit
+      // bell outlives the board that justified it.
+      this.setWaitingContext(0);
       this.status.hide();
       return;
     }
@@ -320,6 +340,64 @@ class Controller implements vscode.Disposable {
         ? `${waiting} session${waiting === 1 ? '' : 's'} parked on \`aboard wait\` — click to release`
         : 'No session is waiting. The board is not listening; nothing to notify.';
     this.status.show();
+    this.setWaitingContext(waiting);
+  }
+
+  /**
+   * `aboard.waiting` — the context key the view-title bell is drawn from.
+   *
+   * **This is the fix for the defect the human found on 2026-08-26**: "the poke
+   * in the terminal exited ok, the notification icon was not lit". The release
+   * worked; the indicator did not. Only the status-bar item changed, and the
+   * status bar is not where a human looks when the thing they are deciding about
+   * is a sidebar. The view-title button was a static `$(bell)` in both states,
+   * so the one affordance whose entire job is to say *somebody is blocked on you*
+   * said nothing at all.
+   *
+   * A boolean rather than the count, because a `when` clause cannot do
+   * arithmetic and the count already has a home in the status bar and in the
+   * button's own tooltip. Two `view/title` entries read it (see package.json):
+   * `aboard.notifyIdle` with `$(bell)` when it is false, `aboard.notifyWaiting`
+   * with `$(bell-dot)` when it is true. Both run the same handler as
+   * `aboard.notify`; VS Code takes a menu item's icon and tooltip from the
+   * COMMAND, so two states mean two command ids — there is no per-menu-entry
+   * icon override to reach for.
+   *
+   * Both sources drive it: the `waiters` frame (which is only sent when the
+   * count CHANGES) and the `/waiters` read on every reload (which is what
+   * catches a session that parked before this window opened).
+   */
+  /**
+   * Ask the board how many sessions are parked, and repaint from the answer.
+   *
+   * Three callers, and they are three different failure modes rather than three
+   * spellings of one: the first read of a board (a session that parked before
+   * this window opened announced itself to nobody), a reconnect (every frame
+   * during the gap is lost), and the bell being pressed over a count that turns
+   * out to be stale. A failure here is logged and left alone — the count going
+   * stale is worth a line in the output channel, never a notification, because
+   * the human did not ask for it.
+   */
+  private async refreshWaiters(board: Board): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    try {
+      this.waiting.set(board.instanceFile, (await board.waiters()).waiting);
+    } catch (err) {
+      this.log(`${board.title}: could not read the waiter count: ${messageOf(err)}`);
+      return;
+    }
+    this.renderStatus();
+  }
+
+  private setWaitingContext(waiting: number): void {
+    const lit = waiting > 0;
+    if (this.waitingContext === lit) {
+      return;
+    }
+    this.waitingContext = lit;
+    void vscode.commands.executeCommand('setContext', 'aboard.waiting', lit);
   }
 
   /* -------------------------------------------------------------- helpers */
@@ -415,10 +493,28 @@ class Controller implements vscode.Disposable {
         // Saying so is the honest answer. A board with nothing waiting is
         // simply not listening, and a button that pretends otherwise is worse
         // than one that admits it.
+        //
+        // And the bell has to hear it. This is the ONE moment the extension
+        // knows the count for certain — it has just asked — and the count it
+        // was holding is now known to be wrong: a dropped `waiters` frame, or a
+        // waiter that timed out during a reconnect. Leaving it lit put a notice
+        // saying "nobody is waiting" on top of a lit bell and a status bar
+        // reading `notify 1`, which is this item's own defect wearing the other
+        // sign.
+        this.waiting.set(board.instanceFile, 0);
+        this.renderStatus();
         void vscode.window.showInformationMessage('No session is waiting on this board.');
         return;
       }
       const released = await board.poke();
+      // The bell goes out here rather than waiting for the `waiters` frame to
+      // come back and say so. A poke releases EVERY waiter on that board, so
+      // zero is not a guess; and the frame is the board telling us something we
+      // just did, which is a round trip for the one repaint the human is
+      // actually watching. The frame still arrives and still corrects this if a
+      // released session parks again immediately.
+      this.waiting.set(board.instanceFile, 0);
+      this.renderStatus();
       void vscode.window.showInformationMessage(`Released ${released} waiting session${released === 1 ? '' : 's'}.`);
     } catch (err) {
       void vscode.window.showErrorMessage(`Notify failed: ${messageOf(err)}`);
@@ -495,7 +591,7 @@ class Controller implements vscode.Disposable {
     }
     const name = await vscode.window.showInputBox({
       title: `Rename ${node.item.id}`,
-      value: node.item.label === '(unnamed)' ? '' : node.item.label,
+      value: node.item.label === UNNAMED ? '' : node.item.label,
       prompt: 'What the human sees on the tab.',
     });
     if (name === undefined) {
@@ -529,11 +625,29 @@ class Controller implements vscode.Disposable {
     void vscode.window.setStatusBarMessage(`Copied ${node.item.id}`, 2000);
   }
 
+  /**
+   * The tab as it should appear in a sentence — `Migration review (bb32)`.
+   *
+   * Separate from Copy Link, and that separation is the whole fix: this command
+   * used to be titled "Copy Link to This Tab" and put a URL on the clipboard, so
+   * the sidebar had two ways to copy an address and no way at all to copy the
+   * form the board's own documentation tells everyone to write.
+   */
   async copyReference(node: Node): Promise<void> {
     if (node.kind !== 'tab') {
       return;
     }
-    const url = referenceFor(node.entry.board.boardUrl, node.item.id);
+    const text = referenceText(node.item.label, node.item.id);
+    await vscode.env.clipboard.writeText(text);
+    void vscode.window.setStatusBarMessage(`Copied ${text}`, 2000);
+  }
+
+  /** The deep link, which is what the board's own right-click menu copies. */
+  async copyLink(node: Node): Promise<void> {
+    if (node.kind !== 'tab') {
+      return;
+    }
+    const url = linkFor(node.entry.board.boardUrl, node.item.id);
     await vscode.env.clipboard.writeText(url);
     void vscode.window.setStatusBarMessage(`Copied ${url}`, 2000);
   }
@@ -583,6 +697,11 @@ export function activate(context: vscode.ExtensionContext): void {
   on('aboard.refresh', () => controller.refresh());
   on('aboard.start', () => controller.start());
   on('aboard.notify', () => controller.notify());
+  // The two view-title bells. Same handler, different icon and different
+  // tooltip: `aboard.waiting` picks which one is on screen, and a menu entry
+  // takes both from its command rather than from itself.
+  on('aboard.notifyIdle', () => controller.notify());
+  on('aboard.notifyWaiting', () => controller.notify());
   on('aboard.openTab', (node: Node) => controller.openTab(node));
   on('aboard.dismissChange', (node: Node) => controller.dismiss(node));
   on('aboard.approveRemoval', (node: Node) => controller.approve(node));
@@ -591,6 +710,7 @@ export function activate(context: vscode.ExtensionContext): void {
   on('aboard.setNote', (node: Node) => controller.note(node));
   on('aboard.copyId', (node: Node) => controller.copyId(node));
   on('aboard.copyReference', (node: Node) => controller.copyReference(node));
+  on('aboard.copyLink', (node: Node) => controller.copyLink(node));
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => void controller.discover()),

@@ -8,6 +8,9 @@ import type { Capabilities, Doc, Edit, TabDoc } from './board';
 
 export type DotKind = 'change' | 'removal' | undefined;
 
+/** What the board itself calls a tab with no name. */
+export const UNNAMED = '(unnamed)';
+
 export interface TabItemModel {
   id: string;
   /** `tab.name`, or `(unnamed)` — the same words the board itself uses. */
@@ -97,7 +100,7 @@ export function contextValueFor(tab: TabDoc): string {
 export function tabItems(doc: Doc, labels: TypeLabels): TabItemModel[] {
   return (doc.tabs ?? []).map((tab) => ({
     id: tab.id,
-    label: typeof tab.name === 'string' && tab.name.trim() !== '' ? tab.name : '(unnamed)',
+    label: typeof tab.name === 'string' && tab.name.trim() !== '' ? tab.name : UNNAMED,
     description: tab.id,
     tooltip: tooltipFor(tab, labels),
     dot: dotFor(tab),
@@ -129,10 +132,46 @@ export function schemaMismatch(doc: Doc, caps: Capabilities | undefined): string
   return `This board's document is schema v${actual} and the server serving it reads v${declared}. The panel will show the board's own reload notice; the sidebar may be incomplete until they agree.`;
 }
 
-/** The deep link the board itself builds for "copy link to this tab". */
-export function referenceFor(boardUrl: string, tabId: string, nodeId?: string): string {
+/**
+ * The deep link the board itself builds for "copy link to this tab".
+ *
+ * **Named `linkFor` here and `referenceFor` in the board's own `views/menu.js`,
+ * deliberately.** That function builds a URL and the menu item above it is
+ * labelled "Copy link to this tab" — so on the board the two words already mean
+ * two things, and only one of them has a function. The other one is the form the
+ * skill tells every agent to use when it addresses the human ("the Migration
+ * review tab (`bb32`)"), and it is what `referenceText` below builds. Keeping
+ * this one called `referenceFor` would have made `copyReference` call it, which
+ * is exactly the confusion the human found: the sidebar offered "Copy Link to
+ * This Tab" under the command id `aboard.copyReference` and no way to copy a
+ * reference at all.
+ */
+export function linkFor(boardUrl: string, tabId: string, nodeId?: string): string {
   const base = boardUrl.replace(/#.*$/, '');
   return nodeId ? `${base}#tab=${tabId}&node=${nodeId}` : `${base}#tab=${tabId}`;
+}
+
+/**
+ * A tab as it should appear in a sentence: `Migration review (bb32)`.
+ *
+ * The rule is the skill's, under *Ids do not travel in both directions*: an id
+ * coming FROM the human is enough, because they can read the state file; an id
+ * going TO them is a token they have to look up. So the name leads and the id
+ * rides beside it as a handle.
+ *
+ * **No backticks**, which is a judgement call: the skill's examples are markdown
+ * and write `` (`bb32`) ``, but this string goes on the system clipboard with no
+ * idea where it lands — a commit message, a terminal, a chat box, a code
+ * comment. Plain text reads correctly in all of them; markdown that arrives
+ * somewhere plain does not.
+ *
+ * A tab with no name has no name to give, so it degrades to the bare id rather
+ * than to `(unnamed) (bb71)`. That makes it identical to Copy Id for exactly the
+ * tabs where the two questions have the same answer, which is honest.
+ */
+export function referenceText(name: string | undefined, tabId: string): string {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  return trimmed === '' || trimmed === UNNAMED ? tabId : `${trimmed} (${tabId})`;
 }
 
 /**

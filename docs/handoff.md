@@ -1,24 +1,25 @@
 # Handoff — `aboard-vscode`: a VS Code extension that moves the tab strip into the sidebar
 
-**Status:** M1–M5 implemented; **M6 has now happened once** (2026-08-26, plan-2 item 15).
-The human ran the extension in a real Extension Development Host against
-`/home/diegos/_dev/ai/borrar`. **Verified once, partially:** activation, discovery of a
-board started AFTER the window was open, the tree listing every tab in document order
-with its id, and the panel rendering the board. **Two defects were found by that run,
-and both are fixed** — the missing status dots and the doubled tab strip; §10.1 below
-says what each actually was, and neither was where it looked. **§10.2 is two more,
-found by reviewing those fixes rather than by running them**: the once-per-board
-`?chrome=` warning fired three times under a slow shell, and the SSE backoff never
-backed off. The rest of §11 is still unticked and is still the only place the
-remaining items can be proven.
+**Status:** M1–M5 implemented; **M6 step 1 is done** — the human worked §11 through in a
+real Extension Development Host on **2026-08-26**, against `/home/diegos/_dev/ai/borrar`
+on `aboard 93ba033`, and **everything on the list passed but two**. No `.vsix` is packaged
+and none should be without the human's word: that is `§10` of
+`development/planning/plan-2_finish-line.md` in the `aboard` repo.
 
-Everything else is covered by `npm test` (125 tests, `node --test`, no framework),
-which since item 15 includes an **integration test that spawns a real `aboard`** and
-drives `activate()` against it through a stand-in `vscode` module (`test/vscode-stub.ts`)
-— so the SSE frame, the reload debounce, `onDidChangeTreeData` and the icon path are
-executed rather than reasoned about. No `.vsix` is packaged and none should be without
-the human's word: that is `§10` of `development/planning/plan-2_finish-line.md` in the
-`aboard` repo.
+**Four defects have been found by running it, in two passes, and all four are fixed.**
+The first pass found the missing status dots and the doubled tab strip (§10.1) — neither
+was where it looked. Reviewing those fixes found two more (§10.2): the once-per-board
+`?chrome=` warning fired three times under a slow shell, and the SSE backoff never backed
+off. The second pass found the last two (§10.3): **the notify bell never lit**, and
+**"Copy Reference" copied a link**. The shape is the same every time — the mechanism
+works, and the thing the human LOOKS at says nothing.
+
+Everything else is covered by `npm test` (`node --test`, no framework — the count is in
+the run, not written down here, because a hand-maintained one lies eventually), which
+includes an **integration test that spawns a real `aboard`** and drives `activate()`
+against it through a stand-in `vscode` module (`test/vscode-stub.ts`) — so the SSE frame,
+the reload debounce, `onDidChangeTreeData`, the icon path, the removal answers and a
+really-parked `aboard wait` are executed rather than reasoned about.
 **Rewritten from:** `handoff-vscode-extension-board-panel.md`, written 2026-08-24 on
 the `board` spike by `agent-research`, stamped against spike commit `7e5a179`, VS Code
 1.133, node 24.15, npm 11.12.
@@ -185,9 +186,15 @@ aboard-vscode/
     activity.svg          the activity-bar icon (currentColor — VS Code tints it)
   test/                   node --test, no framework
     vscode-stub.ts        a stand-in `vscode` module. NOT a test file, never an emulator
+    fakeboard.ts          a board-shaped HTTP server + activate() on top of it. Also not a test file
     integration.test.ts   spawns a real aboard and drives activate() against it
     oldboard.test.ts      a board predating ?chrome=, and the one warning it earns
+    notify.test.ts        the aboard.waiting context key, and both ways it is fed
+    copy.test.ts          Copy Reference and Copy Link, pressed as a human presses them
+    manifest.test.ts      the contributions as data — the half no runtime test can see
     media.test.ts         the icon files parse, and the check can be seen failing
+    …plus board/boundary/discovery/health/launch/messages/model/sse/tokens .test.ts,
+     one per pure module, named after the file they cover
 ```
 
 **`test/vscode-stub.ts` is a change of posture and worth defending.** Until item 15 no
@@ -197,7 +204,11 @@ run then produced a defect that looked exactly like an adapter bug and was not o
 there was no way to rule the adapter out except to run it. The stub models only what the
 extension actually depends on: an `EventEmitter` that fires synchronously, a TreeView
 that re-walks `getChildren`/`getTreeItem` when `onDidChangeTreeData` fires, `setContext`,
-and notifications recorded rather than shown. It must not grow into a VS Code emulator —
+notifications and clipboard writes recorded rather than performed, the status-bar item as
+it currently reads, and — added for §10.3 — the provider's own NODE behind each rendered
+row, because that object is exactly what VS Code hands a `view/item/context` command, so a
+test can press a menu item the way a human does rather than calling the function under it.
+It must not grow into a VS Code emulator —
 the moment it needs a webview it has gone too far, and `panel.ts` is deliberately still
 uncovered for exactly that reason.
 
@@ -364,8 +375,10 @@ Actions worth having, all writes the board already permits from a human:
 | Deny removal | drop `pendingRemoval` |
 | Rename | set `name` |
 | Set note | set `note` |
-| Notify waiting session | `POST /poke` |
-| Copy id / reference | clipboard only |
+| Notify waiting session | `POST /poke`, with the bell drawn from `aboard.waiting` — §10.3 |
+| Copy id | clipboard only |
+| Copy reference (`Migration review (bb32)`) | clipboard only |
+| Copy link to this tab (the deep link) | clipboard only |
 
 Deleting a tab and dismissing markers are gestures the server *refuses* from agents.
 Offering them here is not a liberty — it is the point of being the human's client. Get
@@ -421,13 +434,12 @@ was built and how far it has actually been taken.
   then an error naming what happened.
 - **M6 — install.** `.vsix`, installed locally, used for a week. *Done when:* it
   survives a VS Code restart and a board restart without manual steps.
-  → **Started: run once in an Extension Development Host by the human on 2026-08-26.**
-  Still no `vsce` and no `code --install-extension` — the packaging half remains gated
-  on the human (plan-2 §10). What that one run established: the extension activates,
-  discovers a board started after the window was already open (so the instance-file
-  watcher fires), and lists every tab in document order with its id; the panel renders
-  the board. What it broke: the two defects in §10.1. Everything in §11 that is still
-  unticked is still unticked.
+  → **Step 1 done: §11 worked through in an Extension Development Host by the human on
+  2026-08-26, twice.** Still no `vsce` and no `code --install-extension` — the packaging
+  half remains gated on the human (plan-2 §10), and "used for a week" has not started.
+  What the two runs established: everything on the checklist except the two rows now
+  marked `[~]`, which failed, were fixed (§10.3), and have not been looked at since.
+  What they broke: four defects total, §10.1 and §10.3.
 
 Both of the "if it has not landed" allowances this section used to carry are spent:
 `?chrome=` and the `active` message shipped on the `aboard` side on 2026-08-26, so M2
@@ -601,6 +613,115 @@ does not produce.
   response and the request, and each announcement used to schedule a reconnect of its
   own, which is two live streams delivering every frame twice with no way back to one.
 
+### 10.3 What the SECOND pass through §11 found
+
+The human worked the rest of the checklist in a real VS Code on 2026-08-26, against the
+`borrar` board on `aboard 93ba033`. **Everything passed but two**, and both are the same
+kind of defect as §10.1: the mechanism worked and the part the human LOOKS at did not.
+Neither is a bug in a rule; both are bugs in what the sidebar says about itself.
+
+**1. Notify: "the poke in the terminal exited ok, the notification icon was not lit."**
+
+The release was never in doubt — the parked session came back and the CLI exited 0. What
+did not happen is the only half a human can see before pressing anything: **the
+view-title bell never changed.** Only the status-bar item did (`$(bell-dot) aboard ·
+notify 1`), and the status bar is not where somebody looks when the question is about the
+sidebar they are already staring at. `aboard.notify` contributed a single static
+`$(bell)`, so the one affordance whose entire job is to say *a session is blocked on you*
+said exactly the same thing whether one was or not.
+
+The fix is a context key, `aboard.waiting`, set from the waiter count, with **two**
+`view/title` entries reading it. Two, because a menu entry takes its icon *and* its
+tooltip from the COMMAND — there is no per-entry override — so the lit and unlit states
+have to be two command ids (`aboard.notifyWaiting` with `$(bell-dot)`, `aboard.notifyIdle`
+with `$(bell)`) running the same handler. Their titles carry no backticks, because a
+command title is rendered as plain text everywhere it appears and markdown there is two
+stray characters on the screen. They sit in the same `navigation@2` group so the
+bell does not move sideways when it lights, and the plain `aboard.notify` stays as the
+one palette entry, with both decorated ids hidden from it.
+
+Both sources drive the key, and they fail differently, which is why both are tested: the
+`waiters` SSE frame is only sent when the count CHANGES, so a session that parked before
+the window opened is invisible to it, and the `/waiters` read on each reload is the only
+thing that finds that one. The key is also pushed back to `false` when the last board
+goes away — a lit bell that outlives its board is the same defect wearing the other
+sign.
+
+One deliberate extra: the bell goes out when the poke returns, rather than waiting for
+the `waiters` frame to come back and confirm it. A poke releases every waiter on that
+board, so zero is not a guess, and the frame is a round trip for the one repaint the
+human is actually watching. The frame still arrives and still corrects it if a released
+session immediately parks again.
+
+**Two more found reviewing that fix, both the same missing half.** The first version
+treated the `waiters` frame as reliable, and it is not: the server fans a payload out
+with a NON-BLOCKING send and a `default:` (`fanout`, `pkg/aboard/server.go`), so a
+client that is not there — or is not keeping up — is skipped and the frame is gone. The
+tree survives that, because a `state` frame is followed by a re-read of the whole
+document; the waiter count does not, because a session parking during the gap writes
+nothing and produces no state frame at all. So the count needs asking for again, in the
+two places where the extension knows it might be wrong:
+
+- **On reconnect.** `onStatus(connected)` only logged the drop. It now re-reads
+  `/waiters` when the stream comes back, which is the only thing that finds a session
+  that parked while a restarted board was down. Without it the bell stays dark until
+  something unrelated writes to the board — and the human presses Refresh precisely
+  because the bell is dark.
+- **When the bell is pressed over a stale count.** `notify()` re-reads `/waiters`, and
+  on `0` it said *"No session is waiting on this board"* while leaving the bell lit and
+  the status bar reading `notify 1` behind the notice. That is this section's own defect
+  wearing the other sign: the mechanism was right, the screen contradicted it. The one
+  moment the extension is certain of the count is the moment it has just asked, so that
+  answer now reaches the bell.
+
+Both are in `test/notify.test.ts` and both were watched failing first — the second
+asserting the contradiction directly, the first by cutting the fake board's streams
+(`dropStreams`) with the count changed behind them and timing out at 15s.
+
+A third, smaller: `render()` now returns early on a disposed controller. A reload in
+flight when the window closes still had an `entries` array and would push a context key
+and a status bar for a board nobody is watching, over the top of whatever replaced it.
+
+**2. Copy reference: "copy id worked, there is no copy reference; there is copy link to
+this tab and it works."**
+
+Exactly right, and the command id says how it happened: `aboard.copyReference` was
+titled *Copy Link to This Tab* and put a URL on the clipboard. So the sidebar offered two
+ways to copy an address and no way at all to copy the form the board's own documentation
+tells every agent to use when addressing a human — the name, with the id beside it
+(`Migration review (bb32)`, the skill's *Ids do not travel in both directions*).
+
+Now both: **Copy Reference** (`referenceText`) and **Copy Link to This Tab**
+(`linkFor`), in one context-menu group after Copy Id, narrowest to widest.
+
+Two judgement calls inside that, both recorded because the brief for this work assumed
+otherwise. **The board's own `views/menu.js` does not have a "Copy reference".** Its
+`referenceFor()` builds a URL and the menu item above it reads *Copy link to this tab*
+— so "reference" as a name is already taken by the URL there, while "reference" as a
+FORM is the prose one the skill mandates. Rather than import that collision, the URL
+builder here is called `linkFor` and `referenceFor` is gone; a `copyReference` command
+calling `linkFor` is precisely the confusion the human found, and the function names are
+where it would come back. **And the copied text carries no backticks**, though the
+skill's own examples are markdown: this string goes on the system clipboard with no idea
+where it lands — a commit message, a terminal, a chat box — and plain text reads
+correctly in all of them where markdown arriving somewhere plain does not. A tab with no
+name degrades to the bare id rather than to `(unnamed) (bb99)`.
+
+**What the tests can and cannot say.** The bell is driven end to end in
+`test/integration.test.ts` against a REAL spawned board with a REAL `aboard wait` parked
+on it: the key flips true, notify is pressed through the controller, the CLI exits 0 and
+the key flips back. A stub answering `{"waiting": 1}` could not have exited 0, which is
+why that one is not in the fake-board file. `test/notify.test.ts` covers the transitions
+that are awkward to provoke against a real binary (a count seeded from `/waiters` with no
+frame, a board disappearing under a lit bell). `test/copy.test.ts` presses both copy
+commands through their registered handlers with the tree node VS Code would hand them —
+a test calling `referenceText()` directly would still pass with both menu items wired to
+the wrong function. `test/manifest.test.ts` asserts the contributions as data, because
+the bell fix is mostly a manifest change and nothing in `node --test` renders a title
+bar. **What none of them can say** is that VS Code draws the right bell from that key, or
+that the two copy items appear in that order on a right-click — which is why both rows in
+§11 are `[~]` and not `[x]`.
+
 ### Five things this list called "handled" that were not (found in review)
 
 Each was verified against a real `aboard serve`, not reasoned about. They share a
@@ -650,23 +771,33 @@ origin; this pins the base path too. The invariant it rests on — that every
 
 ## 11. Hand-verification checklist
 
-Nothing below can be asserted headlessly **in a real host**. `[x]` was observed by the
-human on 2026-08-26; `[ ]` is still open, and the first runs did not reach it. `[~]` is
-the third state this list needed once the integration test existed: the part that CAN be
-driven against a real board is proven, and the part that needs a human looking at VS Code
-is not — a full tick there would claim more than anybody has seen.
+Nothing below can be asserted headlessly **in a real host**. `[x]` was observed by a
+human, with the date; `[ ]` is still open. `[~]` is the third state this list needed
+once the integration test existed: the part that CAN be driven against a real board is
+proven, and the part that needs a human looking at VS Code is not — a full tick there
+would claim more than anybody has seen.
+
+**The list was worked through twice on 2026-08-26.** The first pass (plan-2 item 15)
+reached the top four rows and stopped on two defects. The second pass — the human
+sitting in a real VS Code against the `borrar` board, `aboard 93ba033` — went through
+everything that was left and **passed all of it but two**, which are the two rows now
+carrying `[~]`. Both are fixed here (§10.3); neither fix has been looked at in a
+running host, and until it is, the honest mark is not a tick.
 
 - [x] The extension activates and the tree lists every tab, in `aboard.json` order,
-      each with its id as the description.
+      each with its id as the description. (2026-08-26)
 - [x] A board started AFTER the window was already open still appears — so the
-      `**/.aboard/run/instance*.json` watcher fires and discovery re-runs.
-- [x] The board renders inside the panel.
-- [ ] Tab switching does not reload the page (pan a DAG, leave a source editor open,
-      come back).
-- [ ] The panel survives being dragged to another editor group, and being hidden and
-      revealed (`retainContextWhenHidden`).
-- [ ] `html` tabs paint inside the panel — the webview console is the last word, not
-      a headless run.
+      `**/.aboard/run/instance*.json` watcher fires and discovery re-runs. (2026-08-26)
+- [x] The board renders inside the panel. (2026-08-26)
+- [x] Tab switching does not reload the page. (2026-08-26) The mechanism is the one
+      the whole navigation design rests on: a fragment-only `src` change fires
+      `hashchange` without reloading, so no SSE stream drops and no renderer remounts.
+- [x] The panel survives being dragged to another editor group, and being hidden and
+      revealed — `retainContextWhenHidden`. (2026-08-26)
+- [x] `html` tabs paint inside the panel, with a clean console. (2026-08-26) The
+      webview console is the last word here and it was read: `connect-src 'none'` plus
+      the `vscode-webview:` ancestor list is the containment, and neither of them
+      showed up as a blocked request.
 - [x] Dots appear within a second of an agent's write — observed by the human on
       2026-08-26 (third run): a periwinkle dot on a touched tab and a red one on a
       removal request, and after the stream fix (`cff655a`) a new dot on
@@ -675,36 +806,64 @@ is not — a full tick there would claim more than anybody has seen.
       every string chunk under F5. Clearing from the sidebar (Dismiss) was
       observed working in the same session on 2026-08-26.
 - [x] The tab strip does NOT appear inside the panel on a current binary — observed
-      2026-08-26 against `aboard de7773f`. The old-binary warning itself is still
-      unobserved in a real host (asserted by `test/oldboard.test.ts`).
-- [x] A removal request shows red and both answers do what they say. **Observed by
-      the human on 2026-08-26**: the row showed the red dot, and pressing Remove in the
-      board's banner inside the panel (the board's own dialog, after the aboard fix)
-      deleted the tab and the sidebar updated on its own. **The answers were first
-      proven headlessly** (`test/integration.test.ts`, 2026-08-26): against a real
-      spawned board, an agent's write requests a removal, `approveRemoval` written as
-      `__by: "human"` makes the tab GONE from `GET /aboard.json`, `denyRemoval` leaves
-      the tab with its request cleared, and a second deny is skipped rather than posted.
-      Deliberately a server test and not a unit one: the same edit from an agent gets the
-      tab RESTORED with a `pendingRemoval` (guarantee 1), so a test that only checks what
-      the edit does to a JSON object proves nothing about what the board does with it —
-      and a wrong `__by` fails it, which was verified by changing it and watching both
-      cases go red. **Still unobserved in a real host**: the sidebar's own Approve/Deny
-      context-menu items (the human answered through the board's banner). The
-      board's own answer to the same question — the removal banner's Remove button —
-      was DEAD in the panel until 2026-08-26 (it called `window.confirm`, which a webview
-      swallows); that is fixed in the aboard repo, not here.
-- [ ] Notify lights only when a session is genuinely parked on `aboard wait`, and
-      pressing it releases that session.
-- [ ] Board and plain browser open simultaneously, disagreeing about chrome,
-      agreeing about content, each on its own active tab.
+      2026-08-26 against `aboard de7773f`.
+- [x] A removal request shows red and both answers do what they say. **Fully observed
+      on 2026-08-26**: first through the board's own banner inside the panel, and then
+      — second pass — through the sidebar's own **Approve / Deny** context-menu items,
+      which is the half that was still open. Both were proven headlessly first
+      (`test/integration.test.ts`) against a real spawned board: `approveRemoval`
+      written as `__by: "human"` makes the tab GONE, `denyRemoval` leaves the tab with
+      its request cleared, and a second deny is skipped rather than posted.
+      Deliberately a server test and not a unit one — the same edit from an agent gets
+      the tab RESTORED with a `pendingRemoval` (guarantee 1), so a test that only
+      checks what the edit does to a JSON object proves nothing about what the board
+      does with it.
+- [x] Rename and Set note from the sidebar. (2026-08-26) Both are ordinary writes, and
+      the thing being checked is that they land as the HUMAN — an agent renaming a tab
+      is allowed, so a wrong `__by` here would not fail visibly the way Dismiss does.
+- [x] `]` inside the panel moves the tree highlight. (2026-08-26) This is the
+      `{__aboard: 'active', tab}` message arriving and `reveal` acting on it, which
+      until 2026-08-26 depended on a board-side change that had not landed.
+- [x] Two viewers — the panel and a plain browser — open at once, disagreeing about
+      chrome and agreeing about content, each on its own active tab. (2026-08-26)
+      `?chrome=` is per viewer, and the active tab is per page: this row is the one
+      that proves neither leaks into the state file.
+- [x] Restarting the `aboard` server on the same root while the panel is open: the
+      page reloads itself (its own self-heal mechanism, ported from the spike's
+      `reload.go`), the tree stays alive, no stale `app.css`. (2026-08-26)
+- [x] A forced `409` (write from the browser mid-edit) warns rather than clobbers.
+      (2026-08-26)
+- [x] The "Start the board" fallback: with nothing running, the welcome view offers it,
+      it picks the command from what is on `PATH`, and the tree fills in once the
+      board answers. (2026-08-26)
+- [~] **Notify lights only when a session is genuinely parked on `aboard wait`, and
+      pressing it releases that session.** *Failed on 2026-08-26 and is fixed here* —
+      see §10.3. What is proven: `test/integration.test.ts` parks a REAL `aboard wait`
+      against a real spawned board, asserts the `aboard.waiting` context key flips to
+      true, presses notify through the controller, and asserts the CLI exits 0 and the
+      key flips back. What is not: that VS Code draws the `$(bell-dot)` entry from that
+      key, which only a running host can show.
+- [~] **Copy Reference copies a reference, and Copy Link copies a link.** *Failed on
+      2026-08-26 and is fixed here* — see §10.3. Both commands are pressed through
+      their registered handlers with the tree node VS Code would hand them
+      (`test/copy.test.ts`), and the manifest's two titles are asserted as data
+      (`test/manifest.test.ts`). What is not proven: that both items appear on the
+      right-click menu in that order, which is a `menus` contribution only a host
+      evaluates.
 - [ ] The stream survives a board restart, and a board that will NOT come back stops
       being retried every second (kill `aboard serve` and watch the Aboard output
-      channel: the reconnect notices should space out, not tick once a second).
-- [ ] Restarting the `aboard` server on the same root while the panel is open: the
-      page reloads itself (its own self-heal mechanism, ported from the spike's
-      `reload.go`), the tree stays alive, no stale `app.css`.
-- [ ] A forced `409` (write from the browser mid-edit) warns rather than clobbers.
+      channel: the reconnect notices should space out, not tick once a second). The
+      row above it covers the restart the page notices; this one is about the
+      extension's own backoff, which is a different mechanism and is still unwatched.
+- [ ] **Optional: the old-binary warning.** A board served by a binary that predates
+      `?chrome=` raises exactly one warning naming the board and its version. Asserted
+      by `test/oldboard.test.ts`, including the in-flight-write case that used to fire
+      it three times, but never seen in a real host — and increasingly hard to arrange,
+      since it needs an `aboard` built before 2026-08-26 03:34.
+- [ ] **Optional: Remote SSH / Codespaces.** `asExternalUri` + `portMapping` are coded
+      and the webview CSP lists the externalised origin alongside both loopback
+      spellings. Only a real remote window can confirm it, and nothing else in this
+      list depends on it.
 
 **Rebuild before pressing F5, and reload the dev-host window after an edit.**
 `.vscode/launch.json` runs `npm: build` as a preLaunchTask, so the first is handled;

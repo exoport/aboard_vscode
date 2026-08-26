@@ -22,7 +22,9 @@
     "onCommand:aboard.open",
     "onCommand:aboard.refresh",
     "onCommand:aboard.start",
-    "onCommand:aboard.notify"
+    "onCommand:aboard.notify",
+    "onCommand:aboard.notifyIdle",
+    "onCommand:aboard.notifyWaiting"
   ],
   "contributes": {
     "viewsContainers": {
@@ -69,6 +71,18 @@
         "icon": "$(bell)"
       },
       {
+        "command": "aboard.notifyIdle",
+        "title": "Notify: no session is waiting",
+        "category": "Aboard",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "aboard.notifyWaiting",
+        "title": "Notify: a session is parked on aboard wait — click to release it",
+        "category": "Aboard",
+        "icon": "$(bell-dot)"
+      },
+      {
         "command": "aboard.openTab",
         "title": "Show Tab in Panel",
         "category": "Aboard"
@@ -110,12 +124,25 @@
       },
       {
         "command": "aboard.copyReference",
+        "title": "Copy Reference",
+        "category": "Aboard"
+      },
+      {
+        "command": "aboard.copyLink",
         "title": "Copy Link to This Tab",
         "category": "Aboard"
       }
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "aboard.notifyWaiting",
+          "when": "false"
+        },
+        {
+          "command": "aboard.notifyIdle",
+          "when": "false"
+        },
         {
           "command": "aboard.openTab",
           "when": "false"
@@ -147,6 +174,10 @@
         {
           "command": "aboard.copyReference",
           "when": "false"
+        },
+        {
+          "command": "aboard.copyLink",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -156,8 +187,13 @@
           "group": "navigation@1"
         },
         {
-          "command": "aboard.notify",
-          "when": "view == aboard.tabs",
+          "command": "aboard.notifyIdle",
+          "when": "view == aboard.tabs && !aboard.waiting",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aboard.notifyWaiting",
+          "when": "view == aboard.tabs && aboard.waiting",
           "group": "navigation@2"
         },
         {
@@ -211,6 +247,11 @@
           "command": "aboard.copyReference",
           "when": "view == aboard.tabs && viewItem =~ /^tab\\b/",
           "group": "3_copy@2"
+        },
+        {
+          "command": "aboard.copyLink",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b/",
+          "group": "3_copy@3"
         }
       ]
     },

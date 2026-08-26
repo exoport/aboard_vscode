@@ -15,7 +15,15 @@
 //      names a file that exists AND parses;
 //   4. the `?chrome=` probe answering `true` against a current binary;
 //   5. `approveRemoval` and `denyRemoval` answered against a REAL removal request
-//      — the two writes in this repo that had never touched a server.
+//      — the two writes in this repo that had never touched a server;
+//   6. a REAL `aboard wait` parked on the board, the bell lighting because of it,
+//      and the poke from the sidebar releasing it — exit 0 from the CLI.
+//
+// (6) is the defect the human found on 2026-08-26: "the poke in the terminal
+// exited ok, the notification icon was not lit". The release half was already
+// true and is re-proved here; the indicator half is the new claim, and it needs
+// a genuinely blocked process because `/waiters` counts open connections. A stub
+// that merely answers `{"waiting": 1}` cannot exit 0 at the end.
 //
 // (5) is here because the board is the half that enforces it. `approveRemoval`
 // filters a tab out of a document, and an agent doing that gets the tab RESTORED
@@ -314,6 +322,68 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
         [],
       );
     } finally {
+      for (const sub of subscriptions) {
+        sub.dispose();
+      }
+      vscode.workspace.workspaceFolders = [];
+    }
+  });
+
+  it('lights the bell for a session really parked on `aboard wait`, and releases it', async () => {
+    const vscode = require('./vscode-stub') as typeof import('./vscode-stub');
+    const { activate } = require('../src/extension') as typeof import('../src/extension');
+
+    vscode.probe.reset();
+    vscode.workspace.workspaceFolders = [{ uri: { scheme: 'file', fsPath: projectDir } }];
+    const subscriptions: Array<{ dispose(): void }> = [];
+    activate({ subscriptions, extensionUri: vscode.Uri.file(repoRoot) } as unknown as Parameters<typeof activate>[0]);
+
+    let waiter: ChildProcess | undefined;
+    try {
+      await until('the tree to list the board’s tabs', 20_000, () =>
+        vscode.probe.rows.some((r: RenderedRow) => /^bb\d+$/.test(r.description ?? '')) || undefined,
+      );
+      // Nobody waiting yet, and the extension says so rather than leaving the
+      // key unset — a `when` clause cannot tell those apart, but a regression
+      // that stops setting it at all can only be caught here.
+      assert.equal(vscode.probe.contexts.get('aboard.waiting'), false);
+
+      // A real session parks. `--timeout` is short enough that a failure here
+      // cannot leave a process blocked for ten minutes.
+      waiter = spawn(
+        ABOARD_BIN,
+        ['wait', '--for', 'poke', '--by', 'agent-integration', '--note', 'the bell test', '--timeout', '60s'],
+        { cwd: projectDir, stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      const exited = new Promise<number | null>((resolve) => waiter!.on('exit', (code) => resolve(code)));
+
+      // The `waiters` frame, or the /waiters read on the next reload — whichever
+      // gets there first. Both are supposed to work; this asserts the outcome.
+      await until('the bell to light', 20_000, () =>
+        vscode.probe.contexts.get('aboard.waiting') === true || undefined,
+      );
+      assert.match(vscode.probe.status?.text ?? '', /notify 1/);
+
+      // The human presses it.
+      const notify = vscode.probe.commands.get('aboard.notify');
+      assert.ok(notify, 'aboard.notify is not registered');
+      await notify();
+
+      const code = await Promise.race([exited, sleep(10_000).then(() => 'still blocked' as const)]);
+      assert.equal(code, 0, `the parked session was not released (aboard wait exited ${String(code)})`);
+      waiter = undefined;
+
+      await until('the bell to go out', 10_000, () =>
+        vscode.probe.contexts.get('aboard.waiting') === false || undefined,
+      );
+    } finally {
+      if (waiter?.pid) {
+        try {
+          process.kill(waiter.pid, 'SIGTERM');
+        } catch {
+          // Already gone.
+        }
+      }
       for (const sub of subscriptions) {
         sub.dispose();
       }

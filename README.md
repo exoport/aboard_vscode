@@ -10,27 +10,32 @@ none should ever be added; everything it shows comes from the running `aboard` (
 `aboard` grows a sixteenth renderer this extension needs zero changes — if it ever
 does, something here is wrong.
 
-> **Status: verified once, partially.** The human ran it in a real Extension
-> Development Host on **2026-08-26**, against `/home/diegos/_dev/ai/borrar`. **What was
-> observed working:** activation, discovery of a board started *after* the window was
-> already open, the tree listing every tab in document order with its id, and the panel
-> rendering the board. **Two defects were found by that run and are fixed here** — see
-> *What the first real run found* below. **What is still unobserved:** everything in
-> `docs/handoff.md` §11 — tab switching without a page reload, the panel surviving a
-> drag to another editor group, `html` tabs painting inside the webview, the removal-
-> request answers, notify, a forced `409`, and Remote SSH / Codespaces.
+> **Status: verified in a real VS Code on 2026-08-26 (M6 step 1); `.vsix` not yet
+> packaged.** The human worked the hand-verification checklist (`docs/handoff.md` §11)
+> through in an Extension Development Host against `/home/diegos/_dev/ai/borrar` on
+> `aboard 93ba033`, and **everything on it passed but two**: the notify bell never lit,
+> and "Copy Reference" copied a link. Both are fixed here — see *What running it found*
+> below — and both fixes are covered by tests, including one that parks a real
+> `aboard wait` against a real spawned board. **Neither fix has been looked at in a
+> running host**, which is why those two rows are `[~]` rather than `[x]`.
 >
-> **So: treat this extension as UNVERIFIED in a real VS Code for everything not named
-> in that one paragraph.** One run, one board, one machine, one platform. Most of what
-> it does has never been watched working outside `node --test`, and both defects that
-> single run turned up were invisible to the suite — which is the measure of how much
-> the suite can be trusted to stand in for the real thing.
+> **Four defects have been found by running it, across two passes, and all four are
+> fixed.** Every one of them was invisible to the suite at the time, and every one had
+> the same shape: the mechanism worked and the thing on screen said nothing. That is the
+> measure of how far `node --test` can stand in for a real host, and the reason the two
+> rows above stay honest.
 >
-> The rest is covered by `npm test` (the whole suite, `node --test`, no framework), which
-> now includes an **integration test that spawns a real `aboard`** and drives
-> `activate()` against it through a stand-in `vscode` module — so the tree refresh,
-> the SSE frame, the debounce and the icon path are executed rather than reasoned
-> about. No `.vsix` is packaged yet; the loop is still F5.
+> Still open, deliberately: the extension's own SSE backoff watched during a board that
+> will not come back, the old-binary warning (which now needs an `aboard` built before
+> 2026-08-26 03:34 to provoke), and Remote SSH / Codespaces. `.vsix` packaging is gated
+> on the human; the loop is still F5.
+>
+> The rest is covered by `npm test` (`node --test`, no framework — the count is in the
+> run, not written down here, because a hand-maintained one lies eventually), which
+> includes an **integration test that spawns a real `aboard`** and drives `activate()`
+> against it through a stand-in `vscode` module — so the tree refresh, the SSE frame,
+> the debounce, the icon path, the removal answers and the notify round trip are
+> executed rather than reasoned about.
 
 ## Build
 
@@ -67,7 +72,7 @@ a viewer uses.
 | `GET /capabilities` | `{type, label, blurb, …}` per renderer, for tooltips, and `schema` for noticing drift — so no type label and no schema number is hardcoded here. |
 | `POST /aboard.json` | writes: the whole document plus `__base`, `__by: "human"`, `__origin: "vscode"`. `409` → re-read, redo the edit, retry **once**, then tell the human. |
 | `GET /` | the shell the panel frames — and, read once per board, the probe for whether this binary understands `?chrome=` (it stamps `document.body.dataset.chrome`). The manifest has no field for it; see below. |
-| `POST /poke` · `GET /waiters` | the notify channel: a status-bar item and a command. |
+| `POST /poke` · `GET /waiters` | the notify channel: the view-title bell, a status-bar item and a command. `/waiters` is read on every reload as well as followed on the stream, because the `waiters` frame is only sent when the count CHANGES — a session that parked before the window opened is invisible to the frame alone. |
 | `#tab=<id>` on the board URL | navigation, and "copy link to this tab". |
 
 Three facts the design rests on:
@@ -118,7 +123,7 @@ of `<body>`, and that line **is** the feature — testing the feature beats test
 proxy for it. If `aboard` ever declares its shell parameters in the manifest, move the
 probe there and delete `shellSupportsChrome`.
 
-## What the first real run found
+## What running it found
 
 Both defects had the same shape, and it is the shape to expect from this extension:
 **the failure mode is silence.** Neither produced an error, a log line, or anything on
@@ -150,6 +155,37 @@ destroys the socket. The stream reads Buffers now (`cff655a`). The third run saw
 dot arrive live with no Refresh, and `ss` showed the host's connection to the board
 surviving a write.
 
+### And the second pass through the checklist
+
+Two more, found by the human working the rest of `docs/handoff.md` §11 on 2026-08-26.
+Same shape as the first two: the mechanism worked, the screen said nothing.
+
+- **The notify bell never lit.** *"The poke in the terminal exited ok, the notification
+  icon was not lit."* The release was fine — the parked session came back and the CLI
+  exited 0 — but the only half a human sees before pressing anything did not move. Only
+  the status-bar item changed, and `aboard.notify` contributed one static `$(bell)`, so
+  the button whose whole job is to say *a session is blocked on you* said the same thing
+  either way. There is now an `aboard.waiting` context key and **two** `view/title`
+  entries reading it: a menu item takes its icon *and* its tooltip from the command, with
+  no per-entry override, so two states mean two command ids running one handler. Both
+  sources feed the key — the `waiters` frame and the `/waiters` read — because they fail
+  differently.
+- **The bell believed the stream.** Found reviewing the fix above, not by running it.
+  `waiters` frames are fanned out with a non-blocking send and dropped for anyone who is
+  not listening, and a session parking during a gap produces no state change to trigger a
+  re-read — so `/waiters` is now asked again when the stream reconnects, and again when
+  the bell is pressed over a count the board turns out to disagree with. That second one
+  used to show *"No session is waiting"* on top of a still-lit bell.
+- **"Copy Reference" copied a link.** *"Copy id worked, there is no copy reference; there
+  is copy link to this tab and it works."* The command id was `aboard.copyReference` and
+  its title was "Copy Link to This Tab", so the sidebar had two ways to copy an address
+  and none to copy the form the board's own documentation tells every agent to use: the
+  name with the id beside it. Both exist now, named as two different things. The URL
+  builder is called `linkFor` here even though the board's `views/menu.js` calls its
+  equivalent `referenceFor` — on the board that word is already spent on the URL, and a
+  `copyReference` command calling a function called `referenceFor` that returns a link is
+  exactly how this happened.
+
 ## What it does
 
 - **Tree** in `aboard.json` order, always — the order is the human's. Label is the
@@ -161,7 +197,14 @@ surviving a write.
   `portMapping` + `asExternalUri` so it works over Remote SSH and Codespaces.
 - **Actions**, all writes the board permits from a human: dismiss a change,
   approve or deny a removal request, rename, set the note, notify a waiting
-  session, copy an id or a deep link.
+  session, and three separate copies — the id (`bb32`), the **reference**
+  (`Migration review (bb32)`, the form the board's docs tell agents to write when
+  they address a human) and the **link** (the deep link the board's own right-click
+  menu builds). They were one command copying a URL until 2026-08-26; see below.
+- **A bell that says whether anybody is listening.** The view-title button is
+  `$(bell-dot)` while a session is parked on `aboard wait` and `$(bell)` when none is,
+  driven by the `aboard.waiting` context key. A board with nobody waiting is simply not
+  listening, and the button says so rather than pretending.
 - **More than one board** in one window — a multi-root workspace, or one project
   serving a named board beside its default — gets a row each, so the tree says
   which is which.
@@ -188,9 +231,15 @@ media/
   activity.svg          the activity-bar icon (currentColor; VS Code tints it)
 test/
   vscode-stub.ts        a stand-in `vscode` module — NOT a test file, and never an emulator
+  fakeboard.ts          a board-shaped HTTP server, with activate() on top — also not a test file
   integration.test.ts   spawns a real aboard and drives activate() against it
   oldboard.test.ts      a board that predates ?chrome=, and the one warning it earns
+  notify.test.ts        the aboard.waiting context key, and both ways it is fed
+  copy.test.ts          Copy Reference and Copy Link, pressed as a human presses them
+  manifest.test.ts      the contributions as data — the half no runtime test can see
   media.test.ts         the icon files parse, and the check can be seen failing
+  …plus board/boundary/discovery/health/launch/messages/model/sse/tokens .test.ts,
+   one per pure module, named after the file they cover
 ```
 
 The `vscode` import stops at `extension.ts`, `tree.ts` and `panel.ts` on purpose:

@@ -11,7 +11,8 @@ import {
   dismissChange,
   dotFor,
   frameSrc,
-  referenceFor,
+  linkFor,
+  referenceText,
   renameTab,
   schemaMismatch,
   setNote,
@@ -136,10 +137,40 @@ describe('schemaMismatch', () => {
   });
 });
 
-describe('referenceFor', () => {
+describe('linkFor', () => {
   it('builds the same deep link the board’s own menu copies', () => {
-    assert.equal(referenceFor('http://127.0.0.1:41234/', 'bb71'), 'http://127.0.0.1:41234/#tab=bb71');
-    assert.equal(referenceFor('http://127.0.0.1:41234/b/', 'bb71', 'bb9'), 'http://127.0.0.1:41234/b/#tab=bb71&node=bb9');
+    assert.equal(linkFor('http://127.0.0.1:41234/', 'bb71'), 'http://127.0.0.1:41234/#tab=bb71');
+    assert.equal(linkFor('http://127.0.0.1:41234/b/', 'bb71', 'bb9'), 'http://127.0.0.1:41234/b/#tab=bb71&node=bb9');
+  });
+});
+
+describe('referenceText', () => {
+  // The defect this covers: `aboard.copyReference` was titled "Copy Link to This
+  // Tab" and copied a URL, so the sidebar had two ways to copy an address and no
+  // way to copy the form the skill tells every agent to write when it addresses
+  // the human — the name, with the id beside it as a handle.
+  it('names the thing and puts the id beside it', () => {
+    assert.equal(referenceText('Migration review', 'bb32'), 'Migration review (bb32)');
+  });
+
+  it('is plain text, because a clipboard has no idea where it lands', () => {
+    // No backticks and no markdown: this string goes into commit messages and
+    // terminals as often as into chat.
+    assert.equal(referenceText('Build queue', 'bb71'), 'Build queue (bb71)');
+    assert.doesNotMatch(referenceText('Build queue', 'bb71'), /[`*_]/);
+  });
+
+  it('degrades to the bare id when there is no name to give', () => {
+    // Not `(unnamed) (bb71)`. The board's own placeholder is not a name, and
+    // neither is whitespace.
+    assert.equal(referenceText(undefined, 'bb71'), 'bb71');
+    assert.equal(referenceText('', 'bb71'), 'bb71');
+    assert.equal(referenceText('   ', 'bb71'), 'bb71');
+    assert.equal(referenceText('(unnamed)', 'bb71'), 'bb71');
+  });
+
+  it('trims, so a name typed with a trailing space still reads right', () => {
+    assert.equal(referenceText('  Decisions  ', 'bb128'), 'Decisions (bb128)');
   });
 });
 
