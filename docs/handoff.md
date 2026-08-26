@@ -5,7 +5,10 @@ plan-2 item 8; reviewed and repaired the same day — see the end of §10). Ever
 pure part is covered by `npm test` (105 assertions, `node --test`, no framework)
 and the HTTP client has been run against a live `aboard serve`; nothing in this repository has been loaded into VS Code — no
 Extension Development Host, no `.vsix`. §11 below is the hand-verification
-checklist and it is entirely unticked. M6 (install) is not started.
+checklist and it is entirely unticked. **M6 (install, and running it in a real VS Code)
+is not started because it is GATED ON THE HUMAN** — `§10` of
+`development/planning/plan-2_finish-line.md` in the `aboard` repo, where the human decides
+when. It is not the next thing to pick up; it is a question to ask.
 **Rewritten from:** `handoff-vscode-extension-board-panel.md`, written 2026-08-24 on
 the `board` spike by `agent-research`, stamped against spike commit `7e5a179`, VS Code
 1.133, node 24.15, npm 11.12.
@@ -376,8 +379,9 @@ was built and how far it has actually been taken.
   then an error naming what happened.
 - **M6 — install.** `.vsix`, installed locally, used for a week. *Done when:* it
   survives a VS Code restart and a board restart without manual steps.
-  → **Not started, and out of scope for plan-2 item 8** — no `vsce`, no
-  `code --install-extension`.
+  → **Not started, out of scope for plan-2 item 8, and gated on the human** (that plan's
+  §10) — no `vsce`, no `code --install-extension`, no Extension Development Host. The
+  human says when, and §11 below is the checklist to run when they do.
 
 Both of the "if it has not landed" allowances this section used to carry are spent:
 `?chrome=` and the `active` message shipped on the `aboard` side on 2026-08-26, so M2

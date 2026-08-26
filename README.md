@@ -10,7 +10,12 @@ none should ever be added; everything it shows comes from the running `aboard` (
 `aboard` grows a sixteenth renderer this extension needs zero changes — if it ever
 does, something here is wrong.
 
-> **Status: implemented, and UNVERIFIED in a real VS Code.**
+> **Status: implemented, and UNVERIFIED in a real VS Code. M6 — installing it and
+> running it in a real editor — is GATED ON THE HUMAN**, not merely unfinished: it is
+> `§10` of `development/planning/plan-2_finish-line.md` in the `aboard` repo, where the
+> human decides when. Do not package a `.vsix`, install one, or open an Extension
+> Development Host without that answer.
+>
 > Every pure part is covered by `npm test` (105 assertions, `node --test`, no
 > framework), and the HTTP client has been run
 > against a live `aboard serve` (discovery from a nested directory and from a
@@ -69,17 +74,21 @@ Three facts the design rests on:
   tabs inside it, so the URL can already read `#tab=bb71` while the page shows
   something else.
 
-### Two things the board still owes this extension
+### Two things the board owed this extension — both landed
 
-Both are `handoff-board-for-vscode-panel.md` §4–§5 in the `aboard` repo, and
-neither has landed. The extension codes for both anyway, because both are free to
-send and cost a change here later:
+Both were `handoff-board-for-vscode-panel.md` §4–§5 in the `aboard` repo, and both
+**shipped on 2026-08-26** (that repo's plan-2 item 7). This repository needed no change
+to take them: it had coded for both from the start, because each was free to send and
+would only ever have cost a change here later.
 
-- **`?chrome=notabs`** — hide the board's own tab strip. Until it lands the panel
-  shows two tab strips, one above the other. Ugly, fully functional.
-- **`{__aboard: 'active', tab}`** — the board announcing its own tab switches.
-  Until it lands the sidebar highlight follows clicks that started in the tree and
-  drifts when the human presses `[`, `]` or `1`–`9` inside the panel.
+- **`?chrome=notabs`** — hides the board's own tab strip, so the panel shows one strip
+  rather than two. `frameSrc()` has always asked for it.
+- **`{__aboard: 'active', tab}`** — the board announces its own tab switches, so the
+  sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the panel and not only
+  clicks that started in the tree. `media/panel.html` has always listened for it.
+
+Neither is OBSERVED to work: like everything else here, they are unproven until this
+extension runs in a real VS Code.
 
 ## What it does
 
