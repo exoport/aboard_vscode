@@ -16,7 +16,7 @@
 //   4. the `?chrome=` probe answering `true` against a current binary;
 //   5. `approveRemoval` and `denyRemoval` answered against a REAL removal request
 //      — the two writes in this repo that had never touched a server;
-//   6. a REAL `aboard wait` parked on the board, the bell lighting because of it,
+//   6. a REAL `aboard wait` parked on the board, the nudge button lighting because of it,
 //      and the poke from the sidebar releasing it — exit 0 from the CLI.
 //
 // (6) is the defect the human found on 2026-08-26: "the poke in the terminal
@@ -345,7 +345,7 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
     }
   });
 
-  it('lights the bell for a session really parked on `aboard wait`, and releases it', async () => {
+  it('lights the nudge button for a session really parked on `aboard wait`, and releases it', async () => {
     const vscode = require('./vscode-stub') as typeof import('./vscode-stub');
     const { activate } = require('../src/extension') as typeof import('../src/extension');
 
@@ -368,28 +368,28 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
       // cannot leave a process blocked for ten minutes.
       waiter = spawn(
         ABOARD_BIN,
-        ['wait', '--for', 'poke', '--by', 'agent-integration', '--note', 'the bell test', '--timeout', '60s'],
+        ['wait', '--for', 'poke', '--by', 'agent-integration', '--note', 'the nudge test', '--timeout', '60s'],
         { cwd: projectDir, stdio: ['ignore', 'pipe', 'pipe'] },
       );
       const exited = new Promise<number | null>((resolve) => waiter!.on('exit', (code) => resolve(code)));
 
       // The `waiters` frame, or the /waiters read on the next reload — whichever
       // gets there first. Both are supposed to work; this asserts the outcome.
-      await until('the bell to light', 20_000, () =>
+      await until('the button to light', 20_000, () =>
         vscode.probe.contexts.get('aboard.waiting') === true || undefined,
       );
-      assert.match(vscode.probe.status?.text ?? '', /notify 1/);
+      assert.match(vscode.probe.status?.text ?? '', /nudge 1/);
 
       // The human presses it.
-      const notify = vscode.probe.commands.get('aboard.notify');
-      assert.ok(notify, 'aboard.notify is not registered');
+      const notify = vscode.probe.commands.get('aboard.nudge');
+      assert.ok(notify, 'aboard.nudge is not registered');
       await notify();
 
       const code = await Promise.race([exited, sleep(10_000).then(() => 'still blocked' as const)]);
       assert.equal(code, 0, `the parked session was not released (aboard wait exited ${String(code)})`);
       waiter = undefined;
 
-      await until('the bell to go out', 10_000, () =>
+      await until('the button to go out', 10_000, () =>
         vscode.probe.contexts.get('aboard.waiting') === false || undefined,
       );
     } finally {

@@ -1,14 +1,14 @@
-// The bell in the view title, and the context key that lights it.
+// The nudge button in the view title, and the context key that lights it.
 //
 // **The defect this file exists for**, from the human's §11 run on 2026-08-26:
 // *"the poke in the terminal exited ok, the notification icon was not lit"*. The
 // release worked. The INDICATOR did not: only the status-bar item changed, and
 // the view-title button — the one thing on screen whose whole job is to say
-// *somebody is blocked on you* — was a static `$(bell)` in both states.
+// *somebody is blocked on you* — was one static icon in both states.
 //
 // So what is asserted here is the transition, not the poke: `aboard.waiting`
 // goes true when a session parks, and false again when it is released. VS Code
-// draws the two bells from it (`view/title` in package.json), and a context key
+// draws the two states from it (`view/title` in package.json), and a context key
 // is the only part of that a test outside a real host can see — which is exactly
 // why the stub records `setContext`.
 //
@@ -37,7 +37,7 @@ function waitingKey(vscode: typeof import('./vscode-stub')): unknown {
   return vscode.probe.contexts.get('aboard.waiting');
 }
 
-describe('the notify indicator', { timeout: 30_000 }, () => {
+describe('the nudge indicator', { timeout: 30_000 }, () => {
   it('lights from a waiters frame, and goes out when the session is released', async () => {
     board.waiting = 0;
     const { vscode, dispose } = runExtension(board.projectDir);
@@ -53,21 +53,21 @@ describe('the notify indicator', { timeout: 30_000 }, () => {
       // A session parks on `aboard wait`. The server announces the new count.
       board.waiting = 1;
       board.pushWaiters();
-      await until('the bell to light', 5000, () => waitingKey(vscode) === true);
+      await until('the button to light', 5000, () => waitingKey(vscode) === true);
 
       // And the status bar, which was the ONLY thing that used to change.
-      assert.match(vscode.probe.status?.text ?? '', /notify 1/);
+      assert.match(vscode.probe.status?.text ?? '', /nudge 1/);
       assert.match(vscode.probe.status?.tooltip ?? '', /parked on `aboard wait`/);
 
-      // The human presses the bell. Either of the two view-title commands is the
+      // The human presses the button. Either of the two view-title commands is the
       // same handler; this is the one the status bar is wired to.
-      const notify = vscode.probe.commands.get('aboard.notify');
-      assert.ok(notify, 'aboard.notify is not registered');
+      const notify = vscode.probe.commands.get('aboard.nudge');
+      assert.ok(notify, 'aboard.nudge is not registered');
       await notify();
 
-      assert.equal(board.pokes.length, 1, 'the bell did not poke the board');
+      assert.equal(board.pokes.length, 1, 'the button did not poke the board');
       assert.equal(board.pokes[0]!.by, 'human', 'a poke from the sidebar is the human pressing it');
-      assert.equal(waitingKey(vscode), false, 'the bell stayed lit after the session was released');
+      assert.equal(waitingKey(vscode), false, 'the button stayed lit after the session was released');
       assert.ok(
         vscode.probe.notifications.some((n) => n.level === 'info' && /Released 1 waiting session\./.test(n.message)),
         `expected a "released" notice, got ${JSON.stringify(vscode.probe.notifications)}`,
@@ -86,8 +86,8 @@ describe('the notify indicator', { timeout: 30_000 }, () => {
     board.pokes.length = 0;
     const { vscode, dispose } = runExtension(board.projectDir);
     try {
-      await until('the bell to light from the /waiters read', 10_000, () => waitingKey(vscode) === true);
-      assert.match(vscode.probe.status?.text ?? '', /notify 2/);
+      await until('the button to light from the /waiters read', 10_000, () => waitingKey(vscode) === true);
+      assert.match(vscode.probe.status?.text ?? '', /nudge 2/);
       // No frame was ever pushed. Proving the negative matters here: if a frame
       // had arrived, this test would pass for the wrong reason and the seeding
       // read could be deleted without anything going red.
@@ -97,50 +97,50 @@ describe('the notify indicator', { timeout: 30_000 }, () => {
     }
   });
 
-  it('puts the bell out when the board goes away', async () => {
+  it('puts the button out when the board goes away', async () => {
     board.waiting = 1;
     const { vscode, dispose } = runExtension(board.projectDir);
     try {
-      await until('the bell to light', 10_000, () => waitingKey(vscode) === true);
+      await until('the button to light', 10_000, () => waitingKey(vscode) === true);
 
-      // The workspace loses its folder: discovery finds nothing, and a lit bell
+      // The workspace loses its folder: discovery finds nothing, and a lit button
       // must not outlive the board that justified it.
       vscode.workspace.workspaceFolders = [];
       const refresh = vscode.probe.commands.get('aboard.refresh');
       assert.ok(refresh, 'aboard.refresh is not registered');
       await refresh();
-      await until('the bell to go out', 5000, () => waitingKey(vscode) === false);
+      await until('the button to go out', 5000, () => waitingKey(vscode) === false);
       assert.equal(vscode.probe.status, undefined, 'the status item should be hidden with no board');
     } finally {
       dispose();
     }
   });
 
-  it('registers a command for each bell, and they do the same thing', async () => {
+  it('registers a command for each state, and they do the same thing', async () => {
     // Two commands rather than one, because a `view/title` entry takes its icon
     // AND its tooltip from the command — there is no per-entry override — so the
-    // lit and unlit bells cannot be the same id. They must not be able to drift
+    // lit and unlit states cannot be the same id. They must not be able to drift
     // into doing different things.
     board.waiting = 1;
     board.pokes.length = 0;
     const { vscode, dispose } = runExtension(board.projectDir);
     try {
-      await until('the bell to light', 10_000, () => waitingKey(vscode) === true);
-      const lit = vscode.probe.commands.get('aboard.notifyWaiting');
-      assert.ok(lit, 'aboard.notifyWaiting is not registered — the lit bell would do nothing');
+      await until('the button to light', 10_000, () => waitingKey(vscode) === true);
+      const lit = vscode.probe.commands.get('aboard.nudgeWaiting');
+      assert.ok(lit, 'aboard.nudgeWaiting is not registered — the lit button would do nothing');
       await lit();
-      assert.equal(board.pokes.length, 1, 'the lit bell did not poke');
+      assert.equal(board.pokes.length, 1, 'the lit button did not poke');
       assert.equal(waitingKey(vscode), false);
 
       board.waiting = 0;
-      const idle = vscode.probe.commands.get('aboard.notifyIdle');
-      assert.ok(idle, 'aboard.notifyIdle is not registered — the unlit bell would do nothing');
+      const idle = vscode.probe.commands.get('aboard.nudgeIdle');
+      assert.ok(idle, 'aboard.nudgeIdle is not registered — the unlit button would do nothing');
       await idle();
       // An honest answer rather than a poke nobody is listening for.
-      assert.equal(board.pokes.length, 1, 'pressing the unlit bell poked a board with nobody on it');
+      assert.equal(board.pokes.length, 1, 'pressing the unlit button poked a board with nobody on it');
       assert.ok(
-        vscode.probe.notifications.some((n) => /No session is waiting/.test(n.message)),
-        'the unlit bell should say that nobody is waiting',
+        vscode.probe.notifications.some((n) => /No agent is waiting/.test(n.message)),
+        'the unlit button should say that nobody is waiting',
       );
     } finally {
       dispose();
@@ -149,46 +149,46 @@ describe('the notify indicator', { timeout: 30_000 }, () => {
 
   it('follows the count down to zero from a frame alone', async () => {
     // A waiter that times out or hangs up releases itself; the server
-    // broadcasts the new count and nothing else happens. The bell has to follow.
+    // broadcasts the new count and nothing else happens. The button has to follow.
     board.waiting = 1;
     const { vscode, dispose } = runExtension(board.projectDir);
     try {
-      await until('the bell to light', 10_000, () => waitingKey(vscode) === true);
+      await until('the button to light', 10_000, () => waitingKey(vscode) === true);
       board.waiting = 0;
       board.pushWaiters();
-      await until('the bell to go out', 5000, () => waitingKey(vscode) === false);
+      await until('the button to go out', 5000, () => waitingKey(vscode) === false);
       await sleep(50);
       assert.match(vscode.probe.status?.text ?? '', /aboard 93ba033/, 'the status bar should go back to the version');
     } finally {
       dispose();
     }
   });
-  it('puts the bell out when the board turns out to have nobody on it', async () => {
+  it('puts the button out when the board turns out to have nobody on it', async () => {
     // The count the sidebar holds can be stale, and the server drops a `waiters`
     // frame rather than queueing it for a client that is not keeping up
     // (`fanout` in pkg/aboard/server.go is a non-blocking send with a
-    // `default:`). So the bell can be lit over a board with nobody on it — and
+    // `default:`). So the button can be lit over a board with nobody on it — and
     // the ONE moment the extension is certain of the truth is when it has just
-    // asked. Pressing the bell used to say "No session is waiting" and leave the
-    // bell lit and the status bar reading `notify 1` behind the notice: the
+    // asked. Pressing the button used to say "No session is waiting" and leave it
+    // lit with the status bar reading `nudge 1` behind the notice: the
     // message and the screen contradicting each other is the same defect this
     // whole item is about, wearing the other sign.
     board.waiting = 1;
     board.pokes.length = 0;
     const { vscode, dispose } = runExtension(board.projectDir);
     try {
-      await until('the bell to light', 10_000, () => waitingKey(vscode) === true);
+      await until('the button to light', 10_000, () => waitingKey(vscode) === true);
       // The waiter goes away and the frame announcing it never arrives.
       board.waiting = 0;
-      const notify = vscode.probe.commands.get('aboard.notify');
+      const notify = vscode.probe.commands.get('aboard.nudge');
       assert.ok(notify);
       await notify();
       assert.deepEqual(board.pokes, [], 'there was nobody to poke');
       assert.ok(
-        vscode.probe.notifications.some((n) => /No session is waiting/.test(n.message)),
+        vscode.probe.notifications.some((n) => /No agent is waiting/.test(n.message)),
         'the honest answer is still the honest answer',
       );
-      assert.equal(waitingKey(vscode), false, 'the bell contradicted the notice it had just shown');
+      assert.equal(waitingKey(vscode), false, 'the button contradicted the notice it had just shown');
       assert.match(vscode.probe.status?.text ?? '', /aboard 93ba033/);
     } finally {
       dispose();
@@ -199,9 +199,9 @@ describe('the notify indicator', { timeout: 30_000 }, () => {
     // Every frame sent while the stream was down is lost, and the waiter count
     // is the one piece of state here with no other refresh path: the tree is
     // re-read on a `state` frame, but a session parking during the gap produces
-    // no state change at all. Without this the bell stays dark until something
+    // no state change at all. Without this the button stays dark until something
     // unrelated writes to the board, or the human presses Refresh — and the
-    // human presses Refresh because the bell is dark.
+    // human presses Refresh because the button is dark.
     board.waiting = 0;
     const { vscode, dispose } = runExtension(board.projectDir);
     try {
@@ -215,8 +215,8 @@ describe('the notify indicator', { timeout: 30_000 }, () => {
       board.dropStreams();
 
       // The reconnect is what has to notice. `backoffDelay(1)` is 1s.
-      await until('the bell to light after the reconnect', 15_000, () => waitingKey(vscode) === true);
-      assert.match(vscode.probe.status?.text ?? '', /notify 3/);
+      await until('the button to light after the reconnect', 15_000, () => waitingKey(vscode) === true);
+      assert.match(vscode.probe.status?.text ?? '', /nudge 3/);
     } finally {
       dispose();
     }

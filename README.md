@@ -10,8 +10,8 @@ none should ever be added; everything it shows comes from the running `aboard` (
 `aboard` grows a sixteenth renderer this extension needs zero changes — if it ever
 does, something here is wrong.
 
-> **Status: verified in a real VS Code on 2026-08-26 (M6 step 1); `.vsix` not yet
-> packaged.** The human worked the hand-verification checklist (*What has been observed
+> **Status: verified in a real VS Code on 2026-08-26 (M6 step 1); a dev `.vsix` packages
+> as of 2026-08-27, and has not been installed from yet.** The human worked the hand-verification checklist (*What has been observed
 > in a real VS Code*, below) through in an Extension Development Host against
 > `/home/diegos/_dev/ai/borrar` on
 > `aboard 93ba033`, and **everything on it passed but two**: the notify bell never lit,
@@ -33,10 +33,19 @@ does, something here is wrong.
 > works inside the panel and the panel follows a VS Code theme change. A high-contrast
 > LIGHT theme and `aboard.theme: board` are still unwatched.
 >
+> **Since 2026-08-27 there is a `.vsix`**, and the notify bell is a nudge button. The
+> package step is `npm run package` (see *Install, and the publishing ladder*); it builds
+> and produces `aboard-vscode-0.1.0.vsix`, ~48 KB, for installing into a real editor —
+> which is a different test from F5 and catches different things. **Packaged and verified
+> as an archive; not yet installed or run from one.** The bell became `$(zap)` /
+> `$(circle-slash)`, and the three commands became `aboard.nudge*`: a bell says
+> *notifications for you*, and this button means an agent is blocked on you and one click
+> releases it. Nothing about the mechanism changed.
+>
 > Still open, deliberately: the extension's own SSE backoff watched during a board that
 > will not come back, the old-binary warning (which now needs an `aboard` built before
-> 2026-08-26 03:34 to provoke), and Remote SSH / Codespaces. `.vsix` packaging is gated
-> on the human; the loop is still F5.
+> 2026-08-26 03:34 to provoke), and Remote SSH / Codespaces. Publishing anywhere is still
+> gated on the human.
 >
 > The rest is covered by `npm test` (`node --test`, no framework — the count is in the
 > run, not written down here, because a hand-maintained one lies eventually), which
@@ -80,7 +89,7 @@ a viewer uses.
 | `GET /capabilities` | `{type, label, blurb, …}` per renderer, for tooltips, and `schema` for noticing drift — so no type label and no schema number is hardcoded here. |
 | `POST /aboard.json` | writes: the whole document plus `__base`, `__by: "human"`, `__origin: "vscode"`. `409` → re-read, redo the edit, retry **once**, then tell the human. |
 | `GET /` | the shell the panel frames — and, read once per board, the probe for whether this binary understands `?chrome=` (it stamps `document.body.dataset.chrome`). The manifest has no field for it; see below. |
-| `POST /poke` · `GET /waiters` | the notify channel: the view-title bell, a status-bar item and a command. `/waiters` is read on every reload as well as followed on the stream, because the `waiters` frame is only sent when the count CHANGES — a session that parked before the window opened is invisible to the frame alone. |
+| `POST /poke` · `GET /waiters` | the nudge channel: the view-title button, a status-bar item and a command. `/waiters` is read on every reload as well as followed on the stream, because the `waiters` frame is only sent when the count CHANGES — a session that parked before the window opened is invisible to the frame alone. |
 | `#tab=<id>` on the board URL | navigation, and "copy link to this tab". |
 | `{__aboard: 'active', tab}` posted OUT of the frame | the board announcing its own tab switches, so the sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the panel. Authenticated by `event.source`, never by origin. |
 | `{__aboard: 'theme', kind, tokens}` posted INTO the frame | the editor's colours, as the board's own 21 tokens. Per viewer, applied as inline custom properties, **written nowhere** — not the state file, not `localStorage`. Governed by the `aboard.theme` setting; see below. |
@@ -176,6 +185,11 @@ surviving a write.
 Two more, found by the human working the rest of the verification list on 2026-08-26.
 Same shape as the first two: the mechanism worked, the screen said nothing.
 
+*(This section says "bell" throughout because that is what the button was on the day
+these were found. It became `$(zap)`/`$(circle-slash)` on 2026-08-27 — see **What it
+does** above for why. The mechanism below is unchanged; only the glyph and the command
+ids moved.)*
+
 - **The notify bell never lit.** *"The poke in the terminal exited ok, the notification
   icon was not lit."* The release was fine — the parked session came back and the CLI
   exited 0 — but the only half a human sees before pressing anything did not move. Only
@@ -217,10 +231,21 @@ Same shape as the first two: the mechanism worked, the screen said nothing.
   (`Migration review (bb32)`, the form the board's docs tell agents to write when
   they address a human) and the **link** (the deep link the board's own right-click
   menu builds). They were one command copying a URL until 2026-08-26; see below.
-- **A bell that says whether anybody is listening.** The view-title button is
-  `$(bell-dot)` while a session is parked on `aboard wait` and `$(bell)` when none is,
+- **A nudge button that says whether anybody is listening.** The view-title button is
+  `$(zap)` while an agent is parked on `aboard wait` and `$(circle-slash)` when none is,
   driven by the `aboard.waiting` context key. A board with nobody waiting is simply not
   listening, and the button says so rather than pretending.
+  **It was a bell until 2026-08-27**, and the change is worth recording because the
+  mechanism was never the problem. A bell in an editor means *notifications for you*, so
+  the button read as the board having news to deliver — when what it means is the
+  opposite direction: an agent is blocked, and you are the only one who can release it.
+  `$(zap)` is the board's own word for that; the route this button calls is `POST /poke`.
+  The idle state is `$(circle-slash)` rather than a fainter zap, because "nothing to
+  nudge" is a different statement from "nudge", not a quieter one. The commands were
+  renamed with it — `aboard.nudge`, `aboard.nudgeIdle`, `aboard.nudgeWaiting`, titled
+  "Nudge Waiting Agent" — which was free, since nothing is published and no keybinding
+  anywhere names the old ids. `test/manifest.test.ts` asserts that none of the three is a
+  bell again, so restoring the familiar icon fails a test rather than a review.
 - **More than one board** in one window — a multi-root workspace, or one project
   serving a named board beside its default — gets a row each, so the tree says
   which is which.
@@ -422,8 +447,10 @@ has been looked at in a running host.
 - [x] A forced `409` — a write from the browser mid-edit — warns rather than clobbers. (2026-08-26)
 - [x] The "Start the board" fallback: with nothing running the welcome view offers it, it picks the command from what is on `PATH`, and the tree fills in once the board answers. (2026-08-26)
 - [x] The board follows the VS Code theme. (2026-08-26) The board's own dark/light switch works inside the panel, and switching the VS Code theme recolours it. Still unobserved inside this row: a high-contrast LIGHT theme, and `aboard.theme: board`. Note that full fidelity is **not** the expected result — on VS Code's own Dark+ the text colours are withheld by the contrast guard, so the backgrounds should match the editor while the type stays the board's. A panel whose text went grey-on-grey would be the guard failing, not the theme arriving.
-- [~] **Notify lights only when a session is genuinely parked on `aboard wait`, and pressing it releases that session.** Failed on 2026-08-26 and fixed — see *What running it found*. Proven: `test/integration.test.ts` parks a REAL `aboard wait` against a real spawned board, asserts `aboard.waiting` flips true, presses notify through the controller, and asserts the CLI exits 0 and the key flips back. Not proven: that VS Code draws the `$(bell-dot)` entry from that key, which only a running host can show.
+- [~] **The nudge button lights only when a session is genuinely parked on `aboard wait`, and pressing it releases that session.** Failed on 2026-08-26 and fixed — see *What running it found*. Proven: `test/integration.test.ts` parks a REAL `aboard wait` against a real spawned board, asserts `aboard.waiting` flips true, presses the nudge command through the controller, and asserts the CLI exits 0 and the key flips back. Not proven: that VS Code draws the lit `$(zap)` entry from that key, which only a running host can show.
 - [~] **Copy Reference copies a reference, and Copy Link copies a link.** Failed on 2026-08-26 and fixed. Both commands are pressed through their registered handlers with the tree node VS Code would hand them (`test/copy.test.ts`), and the two titles are asserted as manifest data (`test/manifest.test.ts`). Not proven: that both items appear on the right-click menu in that order, which is a `menus` contribution only a host evaluates.
+- [ ] **Installed from the `.vsix`, rather than run under F5.** `npm run package && code --install-extension aboard-vscode-0.1.0.vsix --force`, then a normal window on a project with a board. This is the first time the extension runs with no debugger attached and from the packaged file list, so it is the only check that can catch a `.vscodeignore` that excludes something load-bearing — and the only one where the F5-only defects (Node 24's inspector killing the SSE stream, `cff655a`) are guaranteed absent.
+- [ ] **The nudge button, in both states, on a real toolbar.** `$(zap)` with an agent parked on `aboard wait` and `$(circle-slash)` with none. Asserted as manifest data in `test/manifest.test.ts` and pressed through its handler in `test/notify.test.ts`, but which glyph VS Code actually paints for a `view/title` entry is something only a host draws.
 - [ ] The stream survives a board restart, and a board that will NOT come back stops being retried every second. Kill `aboard serve` and watch the Aboard output channel: the reconnect notices should space out, not tick once a second. The row about the page reloading covers the restart the *board* notices; this one is the extension's own backoff, which is a different mechanism and is still unwatched.
 - [ ] *Optional:* the old-binary warning. A board served by a binary that predates `?chrome=` raises exactly one warning naming the board and its version. Asserted by `test/oldboard.test.ts`, including the in-flight-write case that used to fire it three times, but never seen in a real host — and increasingly hard to arrange, since it needs an `aboard` built before 2026-08-26 03:34.
 - [ ] *Optional:* Remote SSH / Codespaces. `asExternalUri` + `portMapping` are coded and the webview CSP lists the externalised origin alongside both loopback spellings. Only a real remote window can confirm it, and nothing else here depends on it.
@@ -551,21 +578,32 @@ work.
 
 ## Install, and the publishing ladder
 
-**Today — no packaging at all.** F5 from this repository opens an Extension Development
-Host, and that is the whole loop. Packaging is gated on the maintainer's own run.
-
-**Then — a local `.vsix`.**
+**Today — a local `.vsix`, for testing in a real editor before anything is released.**
+`@vscode/vsce` is a dev dependency and `npm run package` is the whole step:
 
 ```sh
-npm i -D @vscode/vsce
-npx vsce package                                     # → aboard-vscode-0.1.0.vsix
+npm run package                                      # → aboard-vscode-0.1.0.vsix
 code --install-extension aboard-vscode-0.1.0.vsix --force
 ```
 
-That needs only what is already here: `package.json` with `name`, `publisher`, `version`,
-`engines.vscode`, `main`, `contributes` and `activationEvents`; plus `README.md`, a
-`LICENSE` (`vsce` complains without one), and a `.vscodeignore` keeping `src/`,
-`node_modules/` and the esbuild config out of the package.
+`package` runs `vsce package`, which runs `vscode:prepublish` → `npm run build` first, so
+the bundle in the archive is always built from the tree it was packaged from. The result
+is ~48 KB and ten files: `dist/extension.js`, the four things in `media/`, `package.json`,
+`README.md`, `LICENSE.txt` and the two archive manifests. `src/`, `test/`, `out/`,
+`node_modules/`, the esbuild config and every `.map` stay out, which is what
+`.vscodeignore` is for — check that list in vsce's own output when you package, because a
+`.vscodeignore` that stops matching is silent.
+
+**An installed `.vsix` and F5 are not the same test**, and this is the reason to have
+both. F5 runs an Extension Development Host with a debugger attached — which is what
+turned Node 24's inspector instrumentation into a dropped SSE stream (`cff655a`), a defect
+that exists only under F5. An installed build runs the way a user's does: no debugger, the
+real activation events, and the packaged file list rather than the working tree. Anything
+`.vscodeignore` wrongly excludes is invisible until this step.
+
+The manifest already carried everything `vsce` demands — `name`, `publisher`, `version`,
+`engines.vscode`, `main`, `contributes`, `activationEvents`, plus `README.md` and a
+`LICENSE` (it complains without one) — so packaging needed no new metadata, only the tool.
 
 **Later — Open VSX, if and only if somebody else wants it.** It needs an Eclipse
 Foundation account with the Publisher Agreement signed, a namespace, and a token:

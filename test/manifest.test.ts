@@ -1,10 +1,10 @@
 // What `package.json` contributes — the half of both 2026-08-26 defects that no
 // runtime test can see.
 //
-// The bell fix is mostly a manifest change: a context key is worthless unless two
-// `view/title` entries read it, and a menu entry takes its icon and its tooltip
-// from its COMMAND, so the lit and unlit bells have to be two command ids with
-// two icons. Nothing in `node --test` renders a title bar, so the contributions
+// The nudge-button fix is mostly a manifest change: a context key is worthless
+// unless two `view/title` entries read it, and a menu entry takes its icon and its
+// tooltip from its COMMAND, so the lit and unlit states have to be two command ids
+// with two icons. Nothing in `node --test` renders a title bar, so the contributions
 // are asserted as data. The commands they name are pressed for real in
 // `notify.test.ts` and `copy.test.ts`; this file is the other half — that the
 // human can reach them, and that they read as different things.
@@ -54,38 +54,49 @@ const byId = (id: string): Contribution => {
 const menu = (where: string, id: string): Contribution[] =>
   (manifest.contributes.menus[where] ?? []).filter((m) => m.command === id);
 
-describe('the notify bell', () => {
+describe('the nudge button', () => {
   it('has an unlit and a lit command, with different icons', () => {
-    // `$(bell)` in both states is the defect: "the poke in the terminal exited
+    // One icon in both states is the defect: "the poke in the terminal exited
     // ok, the notification icon was not lit".
-    assert.equal(byId('aboard.notifyIdle').icon, '$(bell)');
-    assert.equal(byId('aboard.notifyWaiting').icon, '$(bell-dot)');
+    assert.equal(byId('aboard.nudgeIdle').icon, '$(circle-slash)');
+    assert.equal(byId('aboard.nudgeWaiting').icon, '$(zap)');
+  });
+
+  it('is not a bell, in either state', () => {
+    // The 2026-08-27 change, and the reason it is asserted rather than left to
+    // the eye: a bell in an editor means *notifications for you*, and this
+    // button means the opposite direction — an agent is blocked and you can
+    // release it. The glyph carries the whole of that meaning, so a well-meant
+    // "restore the familiar icon" has to fail here rather than in review.
+    for (const id of ['aboard.nudge', 'aboard.nudgeIdle', 'aboard.nudgeWaiting']) {
+      assert.doesNotMatch(byId(id).icon!, /bell/, `${id} is back to a bell`);
+    }
   });
 
   it('says which state it is in, because the title IS the tooltip', () => {
-    assert.match(byId('aboard.notifyIdle').title!, /no session is waiting/i);
+    assert.match(byId('aboard.nudgeIdle').title!, /no agent is waiting/i);
     // No backticks: VS Code renders a command title as plain text wherever it
     // appears — the palette, the button's tooltip — so markdown there is just
     // two stray characters on screen.
-    assert.match(byId('aboard.notifyWaiting').title!, /parked on aboard wait/);
-    assert.doesNotMatch(byId('aboard.notifyWaiting').title!, /`/);
+    assert.match(byId('aboard.nudgeWaiting').title!, /parked on aboard wait/);
+    assert.doesNotMatch(byId('aboard.nudgeWaiting').title!, /`/);
   });
 
   it('shows exactly one of them at a time, on aboard.waiting', () => {
-    const idle = menu('view/title', 'aboard.notifyIdle');
-    const lit = menu('view/title', 'aboard.notifyWaiting');
+    const idle = menu('view/title', 'aboard.nudgeIdle');
+    const lit = menu('view/title', 'aboard.nudgeWaiting');
     assert.equal(idle.length, 1);
     assert.equal(lit.length, 1);
     assert.equal(idle[0]!.when, 'view == aboard.tabs && !aboard.waiting');
     assert.equal(lit[0]!.when, 'view == aboard.tabs && aboard.waiting');
-    // Same slot, so the bell does not move sideways when it lights.
+    // Same slot, so the button does not move sideways when it lights.
     assert.equal(idle[0]!.group, lit[0]!.group);
     // And the generic id is not ALSO in the title bar, or there would be two
-    // bells whenever the key is false.
-    assert.deepEqual(menu('view/title', 'aboard.notify'), []);
+    // buttons whenever the key is false.
+    assert.deepEqual(menu('view/title', 'aboard.nudge'), []);
   });
 
-  it('keeps one plain entry in the command palette, and hides the two bells', () => {
+  it('keeps one plain entry in the command palette, and hides the two decorated ones', () => {
     // Three ids for one action would be three palette entries saying almost the
     // same thing; the two decorated ones exist only to carry an icon.
     const hidden = (id: string) => {
@@ -93,14 +104,14 @@ describe('the notify bell', () => {
       assert.equal(entries.length, 1, `${id} should have exactly one commandPalette rule`);
       assert.equal(entries[0]!.when, 'false');
     };
-    hidden('aboard.notifyIdle');
-    hidden('aboard.notifyWaiting');
-    assert.deepEqual(menu('commandPalette', 'aboard.notify'), [], 'the palette entry is the plain one');
-    assert.equal(byId('aboard.notify').title, 'Notify Waiting Session');
+    hidden('aboard.nudgeIdle');
+    hidden('aboard.nudgeWaiting');
+    assert.deepEqual(menu('commandPalette', 'aboard.nudge'), [], 'the palette entry is the plain one');
+    assert.equal(byId('aboard.nudge').title, 'Nudge Waiting Agent');
   });
 
   it('activates on every one of them', () => {
-    for (const id of ['aboard.notify', 'aboard.notifyIdle', 'aboard.notifyWaiting']) {
+    for (const id of ['aboard.nudge', 'aboard.nudgeIdle', 'aboard.nudgeWaiting']) {
       assert.ok(
         manifest.activationEvents.includes(`onCommand:${id}`),
         `${id} can be pressed before the extension is awake`,

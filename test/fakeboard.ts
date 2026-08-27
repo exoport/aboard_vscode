@@ -2,7 +2,7 @@
 //
 // **Not a test file** (no `.test.ts`), and not an aboard: it answers the six
 // routes this extension reads and nothing else. It exists because the two
-// defects the human found on 2026-08-26 — a bell that never lit, and a "copy
+// defects the human found on 2026-08-26 — an indicator that never lit, and a "copy
 // reference" that copied a link — both live in the adapter, between an HTTP
 // answer and something on the screen. Neither is reachable from a pure unit test
 // of `model.ts`, and neither needs a real binary: what they need is a board that

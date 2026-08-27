@@ -22,9 +22,9 @@
     "onCommand:aboard.open",
     "onCommand:aboard.refresh",
     "onCommand:aboard.start",
-    "onCommand:aboard.notify",
-    "onCommand:aboard.notifyIdle",
-    "onCommand:aboard.notifyWaiting"
+    "onCommand:aboard.nudge",
+    "onCommand:aboard.nudgeIdle",
+    "onCommand:aboard.nudgeWaiting"
   ],
   "contributes": {
     "configuration": {
@@ -83,22 +83,22 @@
         "icon": "$(play)"
       },
       {
-        "command": "aboard.notify",
-        "title": "Notify Waiting Session",
+        "command": "aboard.nudge",
+        "title": "Nudge Waiting Agent",
         "category": "Aboard",
-        "icon": "$(bell)"
+        "icon": "$(zap)"
       },
       {
-        "command": "aboard.notifyIdle",
-        "title": "Notify: no session is waiting",
+        "command": "aboard.nudgeIdle",
+        "title": "Nudge: no agent is waiting",
         "category": "Aboard",
-        "icon": "$(bell)"
+        "icon": "$(circle-slash)"
       },
       {
-        "command": "aboard.notifyWaiting",
-        "title": "Notify: a session is parked on aboard wait — click to release it",
+        "command": "aboard.nudgeWaiting",
+        "title": "Nudge: an agent is parked on aboard wait — click to release it",
         "category": "Aboard",
-        "icon": "$(bell-dot)"
+        "icon": "$(zap)"
       },
       {
         "command": "aboard.openTab",
@@ -154,11 +154,11 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "aboard.notifyWaiting",
+          "command": "aboard.nudgeWaiting",
           "when": "false"
         },
         {
-          "command": "aboard.notifyIdle",
+          "command": "aboard.nudgeIdle",
           "when": "false"
         },
         {
@@ -205,12 +205,12 @@
           "group": "navigation@1"
         },
         {
-          "command": "aboard.notifyIdle",
+          "command": "aboard.nudgeIdle",
           "when": "view == aboard.tabs && !aboard.waiting",
           "group": "navigation@2"
         },
         {
-          "command": "aboard.notifyWaiting",
+          "command": "aboard.nudgeWaiting",
           "when": "view == aboard.tabs && aboard.waiting",
           "group": "navigation@2"
         },
@@ -292,11 +292,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "node --test out/test/*.test.js",
+    "package": "vsce package",
     "vscode:prepublish": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
     "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.25.4",
     "typescript": "^5.8.3"
   }

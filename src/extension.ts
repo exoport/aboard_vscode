@@ -94,7 +94,7 @@ class Controller implements vscode.Disposable {
       showCollapseAll: false,
     });
     this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
-    this.status.command = 'aboard.notify';
+    this.status.command = 'aboard.nudge';
     context.subscriptions.push(this.output, this.view, this.status, this.provider);
   }
 
@@ -339,41 +339,50 @@ class Controller implements vscode.Disposable {
   private renderStatus(): void {
     if (this.entries.length === 0) {
       // No board, nobody waiting. The key has to come back OFF here or a lit
-      // bell outlives the board that justified it.
+      // nudge button outlives the board that justified it.
       this.setWaitingContext(0);
       this.status.hide();
       return;
     }
     const waiting = [...this.waiting.values()].reduce((a, b) => a + b, 0);
     const version = this.entries[0]!.board.instance.version ?? '';
-    this.status.text = waiting > 0 ? `$(bell-dot) aboard · notify ${waiting}` : `$(circuit-board) aboard ${version}`;
+    this.status.text = waiting > 0 ? `$(zap) aboard · nudge ${waiting}` : `$(circuit-board) aboard ${version}`;
     this.status.tooltip =
       waiting > 0
-        ? `${waiting} session${waiting === 1 ? '' : 's'} parked on \`aboard wait\` — click to release`
-        : 'No session is waiting. The board is not listening; nothing to notify.';
+        ? `${waiting} agent${waiting === 1 ? '' : 's'} parked on \`aboard wait\` — click to release`
+        : 'No agent is waiting. The board is not listening; nothing to nudge.';
     this.status.show();
     this.setWaitingContext(waiting);
   }
 
   /**
-   * `aboard.waiting` — the context key the view-title bell is drawn from.
+   * `aboard.waiting` — the context key the view-title nudge button is drawn from.
    *
    * **This is the fix for the defect the human found on 2026-08-26**: "the poke
    * in the terminal exited ok, the notification icon was not lit". The release
    * worked; the indicator did not. Only the status-bar item changed, and the
    * status bar is not where a human looks when the thing they are deciding about
-   * is a sidebar. The view-title button was a static `$(bell)` in both states,
-   * so the one affordance whose entire job is to say *somebody is blocked on you*
+   * is a sidebar. The view-title button was one static icon in both states, so
+   * the one affordance whose entire job is to say *somebody is blocked on you*
    * said nothing at all.
    *
    * A boolean rather than the count, because a `when` clause cannot do
    * arithmetic and the count already has a home in the status bar and in the
    * button's own tooltip. Two `view/title` entries read it (see package.json):
-   * `aboard.notifyIdle` with `$(bell)` when it is false, `aboard.notifyWaiting`
-   * with `$(bell-dot)` when it is true. Both run the same handler as
-   * `aboard.notify`; VS Code takes a menu item's icon and tooltip from the
-   * COMMAND, so two states mean two command ids — there is no per-menu-entry
+   * `aboard.nudgeIdle` with `$(circle-slash)` when it is false,
+   * `aboard.nudgeWaiting` with `$(zap)` when it is true. Both run the same
+   * handler as `aboard.nudge`; VS Code takes a menu item's icon and tooltip from
+   * the COMMAND, so two states mean two command ids — there is no per-menu-entry
    * icon override to reach for.
+   *
+   * **Why not a bell.** It was `$(bell)`/`$(bell-dot)` until 2026-08-27, and the
+   * human's objection is the right one: a bell in an editor means *notifications
+   * for you*, so the button read as the board having news, when what it actually
+   * means is the opposite direction — an agent is blocked and you are the one who
+   * can release it. `$(zap)` is the board's own word for it; the route this
+   * button calls is `POST /poke`. The idle state is `$(circle-slash)` rather than
+   * a quieter version of the same glyph, because "nothing to nudge" is a
+   * different statement from "nudge", not a fainter one.
    *
    * Both sources drive it: the `waiters` frame (which is only sent when the
    * count CHANGES) and the `/waiters` read on every reload (which is what
@@ -385,8 +394,8 @@ class Controller implements vscode.Disposable {
    * Three callers, and they are three different failure modes rather than three
    * spellings of one: the first read of a board (a session that parked before
    * this window opened announced itself to nobody), a reconnect (every frame
-   * during the gap is lost), and the bell being pressed over a count that turns
-   * out to be stale. A failure here is logged and left alone — the count going
+   * during the gap is lost), and the nudge button being pressed over a count that
+   * turns out to be stale. A failure here is logged and left alone — the count going
    * stale is worth a line in the output channel, never a notification, because
    * the human did not ask for it.
    */
@@ -507,20 +516,20 @@ class Controller implements vscode.Disposable {
         // simply not listening, and a button that pretends otherwise is worse
         // than one that admits it.
         //
-        // And the bell has to hear it. This is the ONE moment the extension
+        // And the button has to hear it. This is the ONE moment the extension
         // knows the count for certain — it has just asked — and the count it
         // was holding is now known to be wrong: a dropped `waiters` frame, or a
         // waiter that timed out during a reconnect. Leaving it lit put a notice
-        // saying "nobody is waiting" on top of a lit bell and a status bar
-        // reading `notify 1`, which is this item's own defect wearing the other
+        // saying "nobody is waiting" on top of a lit button and a status bar
+        // reading `nudge 1`, which is this item's own defect wearing the other
         // sign.
         this.waiting.set(board.instanceFile, 0);
         this.renderStatus();
-        void vscode.window.showInformationMessage('No session is waiting on this board.');
+        void vscode.window.showInformationMessage('No agent is waiting on this board.');
         return;
       }
       const released = await board.poke();
-      // The bell goes out here rather than waiting for the `waiters` frame to
+      // The button goes out here rather than waiting for the `waiters` frame to
       // come back and say so. A poke releases EVERY waiter on that board, so
       // zero is not a guess; and the frame is the board telling us something we
       // just did, which is a round trip for the one repaint the human is
@@ -730,12 +739,12 @@ export function activate(context: vscode.ExtensionContext): void {
   on('aboard.open', () => controller.openPanel());
   on('aboard.refresh', () => controller.refresh());
   on('aboard.start', () => controller.start());
-  on('aboard.notify', () => controller.notify());
-  // The two view-title bells. Same handler, different icon and different
+  on('aboard.nudge', () => controller.notify());
+  // The two view-title nudge buttons. Same handler, different icon and different
   // tooltip: `aboard.waiting` picks which one is on screen, and a menu entry
   // takes both from its command rather than from itself.
-  on('aboard.notifyIdle', () => controller.notify());
-  on('aboard.notifyWaiting', () => controller.notify());
+  on('aboard.nudgeIdle', () => controller.notify());
+  on('aboard.nudgeWaiting', () => controller.notify());
   on('aboard.openTab', (node: Node) => controller.openTab(node));
   on('aboard.dismissChange', (node: Node) => controller.dismiss(node));
   on('aboard.approveRemoval', (node: Node) => controller.approve(node));
