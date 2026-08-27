@@ -133,11 +133,34 @@ describe('mapVscodeTheme', () => {
     assert.equal(tokens['--sunken'], '#292929');
     assert.equal(tokens['--surface'], '#343434');
     assert.equal(tokens['--raised'], '#3f3f3f');
-    assert.equal(tokens['--accent'], '#0078d4');
-    assert.equal(tokens['--accent-ink'], '#ffffff');
-    assert.equal(tokens['--danger'], '#f85149');
-    assert.equal(tokens['--agent'], '#4daafc');
     assert.equal(tokens['--line'], '#2b2b2b');
+    assert.equal(tokens['--line-strong'], '#313131');
+    assert.equal(tokens['--edge'], '#6e7681');
+
+    // And the VOICES are not here, on a theme that defines every one of them.
+    // Dark+ has a button.background, a textLink.foreground, an errorForeground
+    // and an editorWarning.foreground; all four are deliberately ignored. See
+    // SOURCES for the measurement that settled it.
+    for (const voice of ['--accent', '--accent-ink', '--accent-dim', '--mark', '--agent', '--focus', '--danger']) {
+      assert.ok(!(voice in tokens), `${voice} is a voice and must stay the board's`);
+    }
+  });
+
+  it('sends the neutrals and none of the voices, whatever the theme defines', () => {
+    // The rule in one assertion. A future row added to SOURCES without asking
+    // which half it belongs in fails here rather than in somebody's editor.
+    const neutrals = ['--bg', '--sunken', '--surface', '--raised', '--text', '--muted', '--dim',
+      '--line', '--line-strong', '--edge'];
+    const { tokens } = mapVscodeTheme({ ...DARK_PLUS, '--vscode-descriptionForeground': '#f0f0f0' }, 'dark');
+    for (const name of Object.keys(tokens)) {
+      assert.ok(neutrals.includes(name), `${name} is not a neutral — the board owns anything that carries meaning`);
+    }
+    // The mark palette in views/markup.spec.json is the case that proved it: on
+    // FireFly Pro these five collapsed to three distinguishable colours, two of
+    // them identical and one invisible.
+    for (const swatch of ['--mark', '--accent', '--focus', '--agent', '--danger']) {
+      assert.ok(!(swatch in tokens), `${swatch} is one of the five mark colours and must stay distinguishable`);
+    }
   });
 
   it('leaves a token OUT when every source for it is absent', () => {
@@ -167,11 +190,11 @@ describe('mapVscodeTheme', () => {
     // The board validates what arrives and warns on ITS console, which is not a
     // console anybody working in VS Code is looking at.
     const tokens = mapVscodeTheme(
-      { '--vscode-editor-background': '#fff; background: url(x)', '--vscode-button-background': '#181818' },
+      { '--vscode-editor-background': '#fff; background: url(x)', '--vscode-panel-border': '#181818' },
       'dark',
     ).tokens;
     assert.ok(!('--bg' in tokens));
-    assert.equal(tokens['--accent'], '#181818');
+    assert.equal(tokens['--line'], '#181818');
     // And with no ground there is no ramp either: the three layers are a
     // function of `--bg`, so a rejected ground takes them with it and the board
     // keeps its own complete set of four rather than three derived from nothing.
@@ -204,17 +227,34 @@ describe('mapVscodeTheme', () => {
       vars[name] = GROUNDS.includes(name) ? '#ffffff' : '#000000';
     }
     const { tokens } = mapVscodeTheme(vars, 'dark');
-    assert.deepEqual(Object.keys(tokens).sort(), [...BOARD_TOKENS].sort());
+    // The NEUTRALS, not all 21: the eleven voices are never sent, so comparing
+    // against BOARD_TOKENS would ask this probe to prove something the mapping
+    // deliberately does not do. BOARD_TOKENS still earns its import above —
+    // `only ever emits names the board declares` is the assertion it belongs to.
+    const NEUTRALS = ['--bg', '--sunken', '--surface', '--raised', '--text', '--muted', '--dim',
+      '--line', '--line-strong', '--edge'];
+    assert.deepEqual(Object.keys(tokens).sort(), [...NEUTRALS].sort());
 
     // One variable at a time, over a ground so the contrast guard is not the
     // thing under test here. (It was, on the first run of this assertion: with
     // no `--bg` to measure against, `editor.foreground` alone mapped to nothing
     // and this read as a dead variable name. The guard was right; the probe was
     // asking the wrong question.)
+    // Against a BASELINE rather than a magic number: a ground on its own already
+    // produces four tokens (itself and the three derived layers), so "at least
+    // two" stopped meaning anything the moment the ramp arrived.
+    const baseline = Object.keys(
+      mapVscodeTheme({ '--vscode-editor-background': '#ffffff' }, 'dark').tokens,
+    ).length;
     for (const name of VSCODE_VARS) {
+      if (name === '--vscode-editor-background') {
+        continue;
+      }
       const alone = mapVscodeTheme({ '--vscode-editor-background': '#ffffff', [name]: '#123456' }, 'dark').tokens;
-      const least = name === '--vscode-editor-background' ? 1 : 2;
-      assert.ok(Object.keys(alone).length >= least, `${name} is read from the page and maps to nothing`);
+      assert.ok(
+        Object.keys(alone).length > baseline,
+        `${name} is read from the page and maps to nothing`,
+      );
     }
   });
 });
@@ -312,7 +352,8 @@ describe('the contrast guard', () => {
     assert.ok(!('--text' in tokens));
     assert.ok(!('--dim' in tokens));
     assert.equal(tokens['--bg'], '#1f1f1f');
-    assert.equal(tokens['--accent'], '#0078d4');
+    // The grounds still travel, which is what keeps the panel in the window.
+    assert.equal(tokens['--surface'], '#343434');
   });
 
   it('measures every ground it is sending, not just the page ground', () => {
@@ -386,6 +427,10 @@ describe('the contrast guard', () => {
     assert.equal(kind, 'dark');
     assert.equal(tokens['--text'], '#ffffff');
     assert.equal(tokens['--line-strong'], '#6fc3df');
-    assert.equal(tokens['--status-done'], '#6fc3df');
+    // `--status-done` used to be given the same sources, on the reasoning that
+    // the board declares it to BE `--line-strong`. It is a STATUS colour — a
+    // voice — so the board keeps it now, and a high-contrast theme gets the
+    // board's own lane dots against its own borders.
+    assert.ok(!('--status-done' in tokens));
   });
 });

@@ -372,11 +372,47 @@ One knock-on worth knowing: the guard now measures text against three grounds
 that are always present, so it withholds text slightly more often than before. It
 is measuring what will actually be painted, which is the point.
 
-**What is deliberately left out.** A token whose VS Code counterpart is absent is
-not sent, so the board's own value for it stands — a colour somebody chose against
-a palette somebody checked, which a guess is not. `contrastBorder` exists only in
-high-contrast themes, and a theme missing one colour must not cost the board a
-whole palette.
+**Follow the editor's neutrals; keep the board's voices.** This is the rule, and
+it took two rounds of looking at a real panel to arrive at it.
+
+*Neutrals* — the ground, the three layers above it, the text hierarchy, the
+hairlines (`--bg`, `--sunken`, `--surface`, `--raised`, `--text`, `--muted`,
+`--dim`, `--line`, `--line-strong`, `--edge`) — follow the editor. They are what
+make the panel belong in the window and they have no meaning to lose.
+
+*Voices* — `--accent`, `--accent-ink`, `--accent-dim`, `--mark`, `--agent`,
+`--focus`, `--danger`, `--drop` and the three `--status-*` — are the board's, in
+the panel exactly as in a browser tab. They were mapped until 2026-08-27 and the
+result was not a theme, it was a lost vocabulary.
+
+Depth is an ORDER; the voices are a SET, chosen so no two can be mistaken for one
+another. VS Code guarantees neither, because nothing asks a theme author to keep a
+link distinguishable from a button. `views/markup.spec.json` is where it showed:
+a mark may take one of five colours, drawn as five swatches side by side. Through
+the old mapping, on FireFly Pro:
+
+| swatch | mapped from | value | in a browser |
+|---|---|---|---|
+| `mark` | `editorWarning.foreground` | `#e6b450` amber | `#fb8c00` orange |
+| `accent` | `button.background` | `#a4bd00` olive | `#a4bd00` |
+| `focus` | `focusBorder` | `#292d36` — near-black, invisible | `#39bae6` cyan |
+| `agent` | `textLink.foreground` | `#a4bd00` — **identical to `accent`** | `#a7adf4` periwinkle |
+| `danger` | `errorForeground` *(FireFly sets none)* | `#f85149` salmon | `#ff0066` magenta |
+
+Five choices rendered as three usable colours, one a repeat and one unusable. And
+the board's voices are a language its own docs teach: periwinkle is what an agent
+says, orange is what the human asks for, and every agent reads those sentences in
+the skill. A panel that repaints them in an editor's colours is not following a
+theme, it is discarding a vocabulary — quietly, with nothing on any console.
+
+`test/theme.test.ts` pins the split both ways: nothing but a neutral may be sent,
+and none of the five mark colours may be.
+
+**What is deliberately left out of the neutrals, too.** A token whose VS Code
+counterpart is absent is not sent, so the board's own value for it stands — a
+colour somebody chose against a palette somebody checked, which a guess is not.
+`contrastBorder` exists only in high-contrast themes, and a theme missing one
+colour must not cost the board a whole palette.
 
 **And the text is guarded.** The board pins its type to WCAG AAA (7:1) because most
 of it is small; an arbitrary VS Code theme does not. `--text`, `--muted` and
@@ -497,7 +533,7 @@ has been looked at in a running host.
 - [~] **The nudge button lights only when a session is genuinely parked on `aboard wait`, and pressing it releases that session.** Failed on 2026-08-26 and fixed — see *What running it found*. Proven: `test/integration.test.ts` parks a REAL `aboard wait` against a real spawned board, asserts `aboard.waiting` flips true, presses the nudge command through the controller, and asserts the CLI exits 0 and the key flips back. Not proven: that VS Code draws the lit `$(zap)` entry from that key, which only a running host can show.
 - [~] **Copy Reference copies a reference, and Copy Link copies a link.** Failed on 2026-08-26 and fixed. Both commands are pressed through their registered handlers with the tree node VS Code would hand them (`test/copy.test.ts`), and the two titles are asserted as manifest data (`test/manifest.test.ts`). Not proven: that both items appear on the right-click menu in that order, which is a `menus` contribution only a host evaluates.
 - [ ] **Installed from the `.vsix`, rather than run under F5.** `npm run package && code --install-extension aboard-vscode-0.1.0.vsix --force`, then a normal window on a project with a board. This is the first time the extension runs with no debugger attached and from the packaged file list, so it is the only check that can catch a `.vscodeignore` that excludes something load-bearing — and the only one where the F5-only defects (Node 24's inspector killing the SSE stream, `cff655a`) are guaranteed absent.
-- [ ] **The panel and a browser tab on the same board look like the same product.** The depth-ramp fix (see *The theme*): the two head strips nearly flat, the icon buttons dark rather than light grey pills, backgrounds still following the editor's ground. Asserted as a pure function over FireFly Pro's and Dark+'s real values, but "does it look right" is a human's answer.
+- [ ] **The panel and a browser tab on the same board look like the same product.** The two fixes in *The theme*: the derived depth ramp (strips nearly flat, icon buttons dark rather than light grey pills) and the neutrals/voices split (the five mark swatches on a `markup` tab being five distinguishable colours, the same five a browser draws). Backgrounds should still follow the editor's ground — that difference is the feature. Asserted as a pure function over FireFly Pro's and Dark+'s real values, but "does it look right" is a human's answer.
 - [ ] **New Tab in the sidebar opens the board's own sheet, and the panel lands on the new tab.** The message hop is covered in `test/panelhtml.test.ts` and the board's half in the aboard repo's browser suite, but the two have never been watched end to end in a host.
 - [ ] **The nudge button, in both states, on a real toolbar.** `$(zap)` with an agent parked on `aboard wait` and `$(circle-slash)` with none. Asserted as manifest data in `test/manifest.test.ts` and pressed through its handler in `test/notify.test.ts`, but which glyph VS Code actually paints for a `view/title` entry is something only a host draws.
 - [ ] The stream survives a board restart, and a board that will NOT come back stops being retried every second. Kill `aboard serve` and watch the Aboard output channel: the reconnect notices should space out, not tick once a second. The row about the page reloading covers the restart the *board* notices; this one is the extension's own backoff, which is a different mechanism and is still unwatched.

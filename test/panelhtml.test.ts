@@ -188,7 +188,10 @@ describe('the panel page', () => {
     // `parseWebviewMessage` is where those are dropped.
     assert.deepEqual(Object.keys(read).sort(), [...VSCODE_VARS].sort());
     assert.equal(read['--vscode-editor-background'], '#1f1f1f');
-    assert.equal(read['--vscode-focusBorder'], '');
+    // A name it reads and this window does not define. `--vscode-focusBorder`
+    // used to be the example; it is no longer read at all, because `--focus` is
+    // a voice the board keeps (see SOURCES).
+    assert.equal(read['--vscode-widget-border'], '');
     // And it still says it is ready, which is what unblocks the first `goto`.
     assert.ok(page.toHost.some((m) => m['type'] === 'ready'));
   });

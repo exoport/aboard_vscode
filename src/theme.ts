@@ -130,27 +130,47 @@ const SOURCES: ReadonlyArray<readonly [BoardToken, readonly string[]]> = [
   ['--line-strong', ['--vscode-contrastBorder', '--vscode-widget-border', '--vscode-panel-border']],
   ['--edge', ['--vscode-editorLineNumber-foreground', '--vscode-descriptionForeground']],
 
-  // The one accent. The board's role for `--accent` is literally "the primary
-  // button", so `button.background` leads and `focusBorder` is the fallback —
-  // the brief named them the other way round and the role decides it.
-  ['--accent', ['--vscode-button-background', '--vscode-focusBorder']],
-  ['--accent-ink', ['--vscode-button-foreground']],
-  ['--accent-dim', ['--vscode-focusBorder', '--vscode-button-background']],
-
-  // The three voices: the human asking for something, an agent saying
-  // something, and a link or focus ring.
-  ['--mark', ['--vscode-editorWarning-foreground', '--vscode-notificationsWarningIcon-foreground', '--vscode-charts-orange']],
-  ['--agent', ['--vscode-textLink-foreground', '--vscode-charts-purple']],
-  ['--focus', ['--vscode-focusBorder', '--vscode-textLink-foreground']],
-  ['--danger', ['--vscode-errorForeground', '--vscode-editorError-foreground', '--vscode-charts-red']],
-  ['--drop', ['--vscode-list-dropBackground', '--vscode-editor-selectionBackground']],
-
-  // Status. The board declares `--status-doing` to BE the accent and
-  // `--status-done` to be `--line-strong` in both variants, so they are given
-  // the same sources rather than a second mechanism for saying "the same as".
-  ['--status-todo', ['--vscode-charts-lines', '--vscode-disabledForeground', '--vscode-descriptionForeground']],
-  ['--status-doing', ['--vscode-button-background', '--vscode-focusBorder']],
-  ['--status-done', ['--vscode-contrastBorder', '--vscode-widget-border', '--vscode-panel-border']],
+  // AND THAT IS ALL. Eleven tokens are deliberately absent from this table, and
+  // they are the ones that carry MEANING rather than depth: `--accent`,
+  // `--accent-ink`, `--accent-dim`, `--mark`, `--agent`, `--focus`, `--danger`,
+  // `--drop`, and the three `--status-*`. The board's own values stand for every
+  // one of them, in the panel exactly as in a browser tab.
+  //
+  // They were mapped until 2026-08-27, from `button.background`,
+  // `editorWarning.foreground`, `textLink.foreground`, `focusBorder`,
+  // `errorForeground` and friends. The failure is the same shape as the depth
+  // ramp above, one level up. Depth is an ORDER; the voices are a SET, chosen so
+  // that no two of them can be mistaken for each other. VS Code's registered
+  // colours guarantee neither, because nothing asks a theme author to keep a
+  // link distinguishable from a button.
+  //
+  // `views/markup.spec.json` is where it shows: a mark may take one of five
+  // colours — `mark`, `accent`, `focus`, `agent`, `danger` — and they are drawn
+  // as five swatches side by side. Through this table, on FireFly Pro:
+  //
+  //     mark    editorWarning.foreground  #e6b450  amber
+  //     accent  button.background         #a4bd00  olive
+  //     focus   focusBorder               #292d36  near-black, invisible
+  //     agent   textLink.foreground       #a4bd00  olive — IDENTICAL to accent
+  //     danger  errorForeground           #f85149  salmon (VS Code's default;
+  //                                                 FireFly sets none)
+  //
+  // Five choices rendered as three usable colours, one of them a repeat and one
+  // of them unusable. In a browser the same five are orange, olive, cyan,
+  // periwinkle and magenta. A human picking a mark colour was picking from a
+  // palette that no longer distinguished anything, and no console said so.
+  //
+  // The rule this settles: **follow the editor's neutrals, keep the board's
+  // voices.** The neutrals — ground, the layers above it, the text hierarchy,
+  // the hairlines — are what make the panel belong in the window, and they have
+  // no meaning to lose. The voices are the board's vocabulary: periwinkle is
+  // what an agent says, orange is what the human asks for, and those sentences
+  // are in `docs/reference/theme.md` and in the skill every agent reads. A panel
+  // that renders them in an editor's colours is not following a theme, it is
+  // discarding a language.
+  //
+  // Do not add a row below without asking which half it is in. If it carries
+  // meaning, the board owns it.
 ];
 
 /**
