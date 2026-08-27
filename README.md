@@ -93,6 +93,7 @@ a viewer uses.
 | `#tab=<id>` on the board URL | navigation, and "copy link to this tab". |
 | `{__aboard: 'active', tab}` posted OUT of the frame | the board announcing its own tab switches, so the sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the panel. Authenticated by `event.source`, never by origin. |
 | `{__aboard: 'theme', kind, tokens}` posted INTO the frame | the editor's colours, as the board's own 21 tokens. Per viewer, applied as inline custom properties, **written nowhere** — not the state file, not `localStorage`. Governed by the `aboard.theme` setting; see below. |
+| `{__aboard: 'newtab'}` posted INTO the frame | the sidebar's **New Tab** button. `?chrome=notabs` hides the board's whole tab strip including its own `+`, so this is how the button reaches the sheet — which the BOARD draws. Nothing about types or empty states passes through here, which is what keeps this repository free of the board's schema. |
 
 Four facts the design rests on:
 
@@ -225,6 +226,15 @@ ids moved.)*
   winning when a tab has both. `TreeView.badge` counts the changed ones.
 - **Panel**: one `<iframe>` on the running board, `retainContextWhenHidden`, and
   `portMapping` + `asExternalUri` so it works over Remote SSH and Codespaces.
+- **New Tab** in the view title, because `?chrome=notabs` hides the board's own `+`
+  along with the strip — it used to sit alone on a row of the panel, which is a whole
+  line of a small viewer. The button posts `{__aboard: 'newtab'}` and the **board**
+  opens its own sheet: the human names the tab and picks the type there, and the board
+  switches to whatever is created. Deliberately not reimplemented here — the sheet knows
+  every type the board has and what an empty state of each looks like, and a copy of
+  that living in a viewer is exactly the coupling this repository exists without. Hidden
+  until a board is actually answering (`aboard.hasBoard`), since with nothing running
+  there is no panel for a sheet to open in.
 - **Actions**, all writes the board permits from a human: dismiss a change,
   approve or deny a removal request, rename, set the note, notify a waiting
   session, and three separate copies — the id (`bb32`), the **reference**
@@ -324,6 +334,43 @@ changes it. `goto` deliberately keeps only its src-prefix pin: navigation had be
 watched working in a real host and the theme had not when this was decided (it has
 since — 2026-08-26), so a wrong guess about
 `null` must cost a colour rather than a click.
+
+**The depth ramp is derived, not borrowed, and it is the one place this mapping
+deliberately stops following the editor.** `--bg` is the editor's background; the
+three layers above it — `--sunken`, `--surface`, `--raised` — are computed from
+it using the board's own steps rather than read off VS Code roles.
+
+They were borrowed until 2026-08-27, from `input.background`,
+`sideBar.background` and `button.secondaryBackground`, and the result did not
+survive contact with a real theme. The board's depth vocabulary is an ORDER —
+`bg → sunken → surface → raised`, running upward from black in dark and downward
+from white in light — and VS Code's registered colours have no ordering
+relationship to each other, because they answer unrelated questions. Measured on
+FireFly Pro, which is where the report came from:
+
+| token | old source | value | board's own |
+|---|---|---|---|
+| `--bg` | `editor.background` | `#0a0f17` | `#000000` |
+| `--sunken` | `input.background` | `#000000` | `#0a0a0a` — **below the ground** |
+| `--surface` | `sideBar.background` | `#0e1421` | `#151515` |
+| `--raised` | `button.secondaryBackground` | `#3a3d41` | `#202020` |
+
+That last row is the loudest: FireFly Pro does not set
+`button.secondaryBackground` at all, so VS Code's default mid grey decided it —
+and `.icon-btn` paints with `--raised`, which made every Edit / Add / Dismiss /
+Fit button in the panel a light grey pill where a browser draws it dark. The two
+head strips went the other way and became recessed boxes. The panel and a browser
+tab on the same board did not look like the same product.
+
+Derived, the same ground gives `#141921`, `#1f242c`, `#2a2f37`: correctly ordered,
+still that theme's blue-black, and the same *relationship* the browser draws. The
+step is applied equally to r, g and b, which is what keeps the editor's tint. If
+`--bg` cannot be parsed the ramp is not sent at all, and the board keeps its own
+complete set of four — the same fail-closed rule the contrast guard follows.
+
+One knock-on worth knowing: the guard now measures text against three grounds
+that are always present, so it withholds text slightly more often than before. It
+is measuring what will actually be painted, which is the point.
 
 **What is deliberately left out.** A token whose VS Code counterpart is absent is
 not sent, so the board's own value for it stands — a colour somebody chose against
@@ -450,6 +497,8 @@ has been looked at in a running host.
 - [~] **The nudge button lights only when a session is genuinely parked on `aboard wait`, and pressing it releases that session.** Failed on 2026-08-26 and fixed — see *What running it found*. Proven: `test/integration.test.ts` parks a REAL `aboard wait` against a real spawned board, asserts `aboard.waiting` flips true, presses the nudge command through the controller, and asserts the CLI exits 0 and the key flips back. Not proven: that VS Code draws the lit `$(zap)` entry from that key, which only a running host can show.
 - [~] **Copy Reference copies a reference, and Copy Link copies a link.** Failed on 2026-08-26 and fixed. Both commands are pressed through their registered handlers with the tree node VS Code would hand them (`test/copy.test.ts`), and the two titles are asserted as manifest data (`test/manifest.test.ts`). Not proven: that both items appear on the right-click menu in that order, which is a `menus` contribution only a host evaluates.
 - [ ] **Installed from the `.vsix`, rather than run under F5.** `npm run package && code --install-extension aboard-vscode-0.1.0.vsix --force`, then a normal window on a project with a board. This is the first time the extension runs with no debugger attached and from the packaged file list, so it is the only check that can catch a `.vscodeignore` that excludes something load-bearing — and the only one where the F5-only defects (Node 24's inspector killing the SSE stream, `cff655a`) are guaranteed absent.
+- [ ] **The panel and a browser tab on the same board look like the same product.** The depth-ramp fix (see *The theme*): the two head strips nearly flat, the icon buttons dark rather than light grey pills, backgrounds still following the editor's ground. Asserted as a pure function over FireFly Pro's and Dark+'s real values, but "does it look right" is a human's answer.
+- [ ] **New Tab in the sidebar opens the board's own sheet, and the panel lands on the new tab.** The message hop is covered in `test/panelhtml.test.ts` and the board's half in the aboard repo's browser suite, but the two have never been watched end to end in a host.
 - [ ] **The nudge button, in both states, on a real toolbar.** `$(zap)` with an agent parked on `aboard wait` and `$(circle-slash)` with none. Asserted as manifest data in `test/manifest.test.ts` and pressed through its handler in `test/notify.test.ts`, but which glyph VS Code actually paints for a `view/title` entry is something only a host draws.
 - [ ] The stream survives a board restart, and a board that will NOT come back stops being retried every second. Kill `aboard serve` and watch the Aboard output channel: the reconnect notices should space out, not tick once a second. The row about the page reloading covers the restart the *board* notices; this one is the extension's own backoff, which is a different mechanism and is still unwatched.
 - [ ] *Optional:* the old-binary warning. A board served by a binary that predates `?chrome=` raises exactly one warning naming the board and its version. Asserted by `test/oldboard.test.ts`, including the in-flight-write case that used to fire it three times, but never seen in a real host — and increasingly hard to arrange, since it needs an `aboard` built before 2026-08-26 03:34.

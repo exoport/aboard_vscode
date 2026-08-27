@@ -293,6 +293,37 @@ describe('the panel page', () => {
     assert.equal(themed(page).length, 1);
   });
 
+  it('forwards the sidebar’s New Tab into the board, and only from the host', () => {
+    // The `+` moved to the view title on 2026-08-27, so this hop is the whole of
+    // it: the host says `newtab`, the page turns it into the board's own
+    // `{__aboard:'newtab'}`, and the BOARD opens the sheet it owns. Nothing
+    // about types or empty states passes through here, which is the point.
+    const page = runPage({});
+    page.load();
+    const before = page.toFrame.length;
+
+    page.fromHost({ type: 'newtab' });
+    const sent = page.toFrame.slice(before);
+    assert.equal(sent.length, 1, 'the host’s newtab did not reach the board');
+    // Field by field: the object was built inside the `vm` context, so its
+    // prototype is that realm's and deepStrictEqual refuses it on identity
+    // alone. The keys are the assertion that matters — nothing about types or
+    // names may ride along on this message.
+    assert.deepEqual(Object.keys(sent[0]!.data), ['__aboard']);
+    assert.equal(sent[0]!.data['__aboard'], 'newtab');
+
+    // Guarded like the theme branches, and this one draws a MODAL: an
+    // agent-authored `html` widget reaching `window.top` must not be able to pop
+    // the new-tab sheet over the human's board.
+    page.fromNested({ type: 'newtab' });
+    assert.equal(page.toFrame.length, before + 1, 'a nested frame opened the new-tab sheet');
+
+    // And the board itself cannot ask this page to ask the board — a loop with
+    // nothing at the end of it but a modal.
+    page.fromBoard({ type: 'newtab' });
+    assert.equal(page.toFrame.length, before + 1, 'the board’s own message came back at it');
+  });
+
   it('takes a theme from the host and not from the board', () => {
     // The frame is cross-origin by design, so the sender is authenticated by
     // source window. A board that posted its own palette back at this page would

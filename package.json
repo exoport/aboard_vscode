@@ -20,6 +20,7 @@
   "activationEvents": [
     "workspaceContains:**/.aboard/**",
     "onCommand:aboard.open",
+    "onCommand:aboard.newTab",
     "onCommand:aboard.refresh",
     "onCommand:aboard.start",
     "onCommand:aboard.nudge",
@@ -69,6 +70,12 @@
         "title": "Open Board Panel",
         "category": "Aboard",
         "icon": "$(window)"
+      },
+      {
+        "command": "aboard.newTab",
+        "title": "New Tab",
+        "category": "Aboard",
+        "icon": "$(add)"
       },
       {
         "command": "aboard.refresh",
@@ -205,19 +212,24 @@
           "group": "navigation@1"
         },
         {
+          "command": "aboard.newTab",
+          "when": "view == aboard.tabs && aboard.hasBoard",
+          "group": "navigation@2"
+        },
+        {
           "command": "aboard.nudgeIdle",
           "when": "view == aboard.tabs && !aboard.waiting",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "aboard.nudgeWaiting",
           "when": "view == aboard.tabs && aboard.waiting",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "aboard.refresh",
           "when": "view == aboard.tabs",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "aboard.start",

@@ -120,6 +120,49 @@ describe('the nudge button', () => {
   });
 });
 
+describe('the New Tab button', () => {
+  // The `+` moved off the board and into the view title on 2026-08-27: under
+  // `?chrome=notabs` the board hides its whole tab strip, and its own + was
+  // costing a row of a small panel. What the board keeps is the SHEET — this
+  // command only asks for it (src/panel.ts), so no type list and no empty state
+  // is duplicated here.
+  it('is contributed with an icon, and sits in the view title', () => {
+    assert.equal(byId('aboard.newTab').title, 'New Tab');
+    assert.equal(byId('aboard.newTab').icon, '$(add)');
+
+    const entries = menu('view/title', 'aboard.newTab');
+    assert.equal(entries.length, 1);
+    assert.match(entries[0]!.group!, /^navigation@/);
+  });
+
+  it('is hidden until a board is actually answering', () => {
+    // Every other view-title button is either harmless with no board or is the
+    // one that starts one. This is neither: with nothing running there is no
+    // panel to open a sheet in, so the button would be a press that does
+    // nothing — the failure mode this extension has already been bitten by four
+    // times.
+    assert.equal(menu('view/title', 'aboard.newTab')[0]!.when, 'view == aboard.tabs && aboard.hasBoard');
+  });
+
+  it('stays in the palette, and activates the extension', () => {
+    // Unlike the two decorated nudge ids, this one is a real command a human may
+    // reasonably reach for by name.
+    assert.deepEqual(menu('commandPalette', 'aboard.newTab'), []);
+    assert.ok(manifest.activationEvents.includes('onCommand:aboard.newTab'));
+  });
+
+  it('does not collide with another button’s slot', () => {
+    // A menu group is an ORDER, and two entries sharing a slot are ordered by
+    // nothing. The two nudge ids share theirs on purpose — they are one button
+    // in two states, and exactly one is ever shown.
+    const slots = (manifest.contributes.menus['view/title'] ?? [])
+      .filter((m) => m.group?.startsWith('navigation@'))
+      .map((m) => `${m.group}`);
+    const dupes = slots.filter((g, i) => slots.indexOf(g) !== i);
+    assert.deepEqual(dupes, ['navigation@3'], `unexpected shared view/title slots: ${slots.join(', ')}`);
+  });
+});
+
 describe('the two copy commands', () => {
   it('offers a reference AND a link, named as two different things', () => {
     // The defect: `aboard.copyReference` was titled "Copy Link to This Tab", so

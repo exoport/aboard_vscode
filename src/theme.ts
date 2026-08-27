@@ -92,13 +92,31 @@ export type BoardToken = (typeof BOARD_TOKENS)[number];
  * document carries as `--vscode-<section>-<name>` custom properties.
  */
 const SOURCES: ReadonlyArray<readonly [BoardToken, readonly string[]]> = [
-  // Depth: the page ground, then the three layers above it. The board's
-  // sentence is `bg → sunken → surface → raised`, running upward from black in
-  // dark and downward from white in light.
+  // Depth: the page GROUND only. The three layers above it are DERIVED from it
+  // (see RAMP below) rather than borrowed from VS Code, and that is the one
+  // place this mapping deliberately stops following the editor.
+  //
+  // They were borrowed until 2026-08-27: `--sunken` from `input.background`,
+  // `--surface` from `sideBar.background`, `--raised` from
+  // `button.secondaryBackground`. The board's depth vocabulary is an ORDER —
+  // `bg → sunken → surface → raised`, running upward from black in dark and
+  // downward from white in light — and VS Code's registered colours carry no
+  // such relationship to each other, because they answer different questions.
+  // Measured on FireFly Pro, which is what the report came from:
+  //
+  //     --bg       editor.background          #0a0f17
+  //     --sunken   input.background           #000000   <- BELOW the ground
+  //     --surface  sideBar.background         #0e1421
+  //     --raised   button.secondaryBackground #3a3d41   <- not set by the
+  //                                                        theme at all, so
+  //                                                        VS Code's default
+  //                                                        grey decided it
+  //
+  // So the two head strips became recessed boxes where the browser draws them
+  // nearly flat, and every `.icon-btn` — Edit, Add, Dismiss, Fit, Re-layout —
+  // came out a light grey pill. The panel and a browser tab on the same board
+  // did not look like the same product.
   ['--bg', ['--vscode-editor-background']],
-  ['--sunken', ['--vscode-input-background', '--vscode-editorWidget-background']],
-  ['--surface', ['--vscode-sideBar-background', '--vscode-editorWidget-background', '--vscode-panel-background']],
-  ['--raised', ['--vscode-button-secondaryBackground', '--vscode-dropdown-background', '--vscode-editorWidget-background']],
 
   // The text hierarchy. It travels as a group or not at all — see the contrast
   // guard below.
@@ -296,6 +314,54 @@ export function contrast(ink: string, ground: string): number | undefined {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/**
+ * The board's own depth ramp, as a distance from the page ground.
+ *
+ * Read off `app.css` and kept in the board's units: dark runs upward from
+ * `#000000` through `#0a0a0a`, `#151515`, `#202020`; light runs downward from
+ * `#ffffff` through `#f6f7f9`, `#f0f2f6`, `#e6e9ef`. The light palette carries a
+ * faint cool tint that a single per-channel step cannot reproduce, and it should
+ * not try to: the step is applied to the EDITOR's ground, whose own tint is the
+ * one worth keeping. Averaged to one number per layer for that reason.
+ *
+ * Applied equally to r, g and b, which is what preserves the ground's hue: on
+ * FireFly Pro's `#0a0f17` the layers come out `#141921`, `#1f242c`, `#2a2f37` —
+ * still that theme's blue-black, correctly ordered, and the same *relationship*
+ * the browser draws.
+ */
+const RAMP: Readonly<Record<BoardThemeKind, Readonly<Record<'--sunken' | '--surface' | '--raised', number>>>> = {
+  dark: { '--sunken': 10, '--surface': 21, '--raised': 32 },
+  light: { '--sunken': -8, '--surface': -13, '--raised': -21 },
+};
+
+/** `#rrggbb`, clamped. Alpha is dropped: a translucent depth layer is not a depth layer. */
+function shift({ r, g, b }: Rgb, by: number): string {
+  const c = (n: number) => Math.round(Math.min(255, Math.max(0, n + by)))
+    .toString(16)
+    .padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+/**
+ * The three layers above the ground, derived from it.
+ *
+ * Returns nothing when the ground cannot be parsed, and that is the same
+ * fail-closed rule the contrast guard follows: with no ground to measure from,
+ * the board's own four values are a set somebody designed, and three derived
+ * from a colour this file could not read would not be.
+ */
+export function depthRamp(bg: string, kind: BoardThemeKind): Record<string, string> {
+  const ground = parseColor(bg);
+  if (!ground) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [token, by] of Object.entries(RAMP[kind])) {
+    out[token] = shift(ground, by);
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------- the mapping */
 
 /**
@@ -369,6 +435,19 @@ export function mapVscodeTheme(vars: Record<string, string>, kind: VscodeThemeKi
       tokens[token] = value;
       break;
     }
+  }
+
+  // The three layers above the ground, derived rather than borrowed. Done here
+  // and not in SOURCES because they have no source: they are a function of
+  // `--bg`, and if `--bg` did not arrive there is nothing to derive them from —
+  // in which case the board keeps its own four, which is a complete set.
+  //
+  // Before the contrast guard on purpose: the guard measures text against the
+  // grounds that will actually be PAINTED, and after this line those are the
+  // derived ones.
+  const ground = tokens['--bg'];
+  if (ground !== undefined) {
+    Object.assign(tokens, depthRamp(ground, boardKind(kind)));
   }
 
   // Every ground the mapping actually produced, not just the page ground. A

@@ -212,6 +212,33 @@ export class BoardPanel {
     });
   }
 
+  /**
+   * Ask the board to open its own New tab sheet.
+   *
+   * The sidebar owns the `+` now — under `?chrome=notabs` the board hides its
+   * whole tab strip, and the button was costing a row of the viewer — but the
+   * FLOW stays on the board, which is the part worth being deliberate about.
+   * The sheet knows every type this board has and what an empty state of each
+   * looks like. Rebuilding that here would put the board's schema in a viewer
+   * that has made a rule of holding none, with nothing to notice when the two
+   * drifted; the board's own README calls that out as the thing never to add.
+   *
+   * So this sends four bytes of intent and the board does the rest — including
+   * switching to whatever gets created, which it already did.
+   *
+   * Unlike `goto` there is nothing to remember if the page is not up yet: a
+   * queued modal that opens some seconds later, over whatever the human has
+   * since started reading, is worse than nothing happening. The caller reveals
+   * the panel first, and a press before the page is ready is simply dropped.
+   */
+  async newTab(): Promise<boolean> {
+    if (!this.ready) {
+      return false;
+    }
+    await this.panel.webview.postMessage({ type: 'newtab' });
+    return true;
+  }
+
   dispose(): void {
     if (this.disposed) {
       return;

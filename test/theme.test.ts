@@ -14,6 +14,7 @@ import {
   BOARD_TOKENS,
   boardKind,
   contrast,
+  depthRamp,
   mapVscodeTheme,
   parseColor,
   themeKindFromBodyClass,
@@ -123,8 +124,15 @@ describe('mapVscodeTheme', () => {
     const { kind, tokens } = mapVscodeTheme(DARK_PLUS, 'dark');
     assert.equal(kind, 'dark');
     assert.equal(tokens['--bg'], '#1f1f1f');
-    assert.equal(tokens['--surface'], '#181818');
-    assert.equal(tokens['--sunken'], '#313131');
+    // The three layers are DERIVED from the ground, not read off the theme.
+    // #1f1f1f is 31, so +10 / +21 / +32 — the board's own dark steps, applied to
+    // the editor's ground instead of to black. Dark+ would otherwise have said
+    // sideBar #181818 for --surface (BELOW the ground) and, for --raised,
+    // button.secondaryBackground #3a3d41 — a mid grey that made every icon
+    // button in the panel a light pill.
+    assert.equal(tokens['--sunken'], '#292929');
+    assert.equal(tokens['--surface'], '#343434');
+    assert.equal(tokens['--raised'], '#3f3f3f');
     assert.equal(tokens['--accent'], '#0078d4');
     assert.equal(tokens['--accent-ink'], '#ffffff');
     assert.equal(tokens['--danger'], '#f85149');
@@ -144,24 +152,32 @@ describe('mapVscodeTheme', () => {
   });
 
   it('falls through to the next source, and skips an empty one', () => {
-    // `--surface` reads sideBar, then editorWidget, then panel. An empty string
-    // is what getPropertyValue returns for a variable this window does not have.
+    // `--line` reads panel.border, then widget.border, then editorGroup.border.
+    // An empty string is what getPropertyValue returns for a variable this
+    // window does not have. (This used to be spelt with `--surface`, which no
+    // longer has sources at all — it is derived from `--bg`.)
     const tokens = mapVscodeTheme(
-      { '--vscode-sideBar-background': '', '--vscode-editorWidget-background': '#202020' },
+      { '--vscode-panel-border': '', '--vscode-widget-border': '#202020' },
       'dark',
     ).tokens;
-    assert.equal(tokens['--surface'], '#202020');
+    assert.equal(tokens['--line'], '#202020');
   });
 
   it('drops a value the board itself would refuse, rather than sending it to be dropped there', () => {
     // The board validates what arrives and warns on ITS console, which is not a
     // console anybody working in VS Code is looking at.
     const tokens = mapVscodeTheme(
-      { '--vscode-editor-background': '#fff; background: url(x)', '--vscode-sideBar-background': '#181818' },
+      { '--vscode-editor-background': '#fff; background: url(x)', '--vscode-button-background': '#181818' },
       'dark',
     ).tokens;
     assert.ok(!('--bg' in tokens));
-    assert.equal(tokens['--surface'], '#181818');
+    assert.equal(tokens['--accent'], '#181818');
+    // And with no ground there is no ramp either: the three layers are a
+    // function of `--bg`, so a rejected ground takes them with it and the board
+    // keeps its own complete set of four rather than three derived from nothing.
+    for (const layer of ['--sunken', '--surface', '--raised']) {
+      assert.ok(!(layer in tokens), `${layer} was derived from a ground that was refused`);
+    }
   });
 
   it('covers every variable it asks the page for', () => {
@@ -200,6 +216,67 @@ describe('mapVscodeTheme', () => {
       const least = name === '--vscode-editor-background' ? 1 : 2;
       assert.ok(Object.keys(alone).length >= least, `${name} is read from the page and maps to nothing`);
     }
+  });
+});
+
+describe('the depth ramp', () => {
+  // The property the old mapping could not hold, and the whole reason the ramp
+  // is derived: `bg → sunken → surface → raised` is an ORDER. VS Code's
+  // registered colours have no ordering relationship to each other — they answer
+  // different questions — so borrowing three of them produced a "ramp" whose
+  // steps could sit in any sequence, and on FireFly Pro two of them did.
+  const grounds = ['#000000', '#0a0f17', '#1f1f1f', '#101010', '#2b2b2b', '#ffffff', '#f8f8f8', '#e0e4ea'];
+
+  it('runs away from the ground, in the direction the variant demands', () => {
+    for (const kind of ['dark', 'light'] as const) {
+      for (const bg of grounds) {
+        const ramp = depthRamp(bg, kind);
+        const lum = (hex: string) => {
+          const c = parseColor(hex)!;
+          return c.r + c.g + c.b;
+        };
+        const steps = [bg, ramp['--sunken']!, ramp['--surface']!, ramp['--raised']!];
+        for (let i = 1; i < steps.length; i++) {
+          const moved = lum(steps[i]!) - lum(steps[i - 1]!);
+          // Clamping at the ends of the range can flatten a step to zero — a
+          // dark ramp from #ffffff has nowhere to go — but it must never
+          // REVERSE, which is the failure that put --sunken below --bg.
+          if (kind === 'dark') {
+            assert.ok(moved >= 0, `${kind} ramp from ${bg} went down at step ${i}: ${steps.join(' → ')}`);
+          } else {
+            assert.ok(moved <= 0, `${kind} ramp from ${bg} went up at step ${i}: ${steps.join(' → ')}`);
+          }
+        }
+      }
+    }
+  });
+
+  it('reproduces the board’s own palette when the ground is the board’s own', () => {
+    // The steps are not invented here: they are app.css's, so a panel on a board
+    // -coloured editor is the board. This is the assertion that says the numbers
+    // in RAMP still mean what their comment claims.
+    assert.deepEqual(depthRamp('#000000', 'dark'), {
+      '--sunken': '#0a0a0a',
+      '--surface': '#151515',
+      '--raised': '#202020',
+    });
+  });
+
+  it('keeps the ground’s hue rather than greying it', () => {
+    // FireFly Pro's ground is a blue-black. A layer that neutralised it would
+    // read as a grey card floating on a blue page — which is what borrowing
+    // button.secondaryBackground did.
+    const ramp = depthRamp('#0a0f17', 'dark');
+    assert.deepEqual(ramp, { '--sunken': '#141921', '--surface': '#1f242c', '--raised': '#2a2f37' });
+    for (const hex of Object.values(ramp)) {
+      const { r, g, b } = parseColor(hex)!;
+      assert.ok(b > g && g > r, `${hex} lost the ground’s blue tint`);
+    }
+  });
+
+  it('sends nothing at all when the ground cannot be read', () => {
+    assert.deepEqual(depthRamp('Canvas', 'dark'), {});
+    assert.deepEqual(depthRamp('', 'light'), {});
   });
 });
 
@@ -242,17 +319,21 @@ describe('the contrast guard', () => {
     // `docs/reference/theme.md`: text is pinned "on the page ground, `--sunken`
     // and `--surface`" — three grounds. A guard that reads only `--bg` passes
     // text that misses the pin exactly where most of the board's small type
-    // sits: on panels and cards. Measured, not invented: #545454 is 7.6:1 on
-    // white and 6.2:1 on this sideBar.
+    // sits: on panels and cards.
+    //
+    // Since the ramp became derived this is STRICTER, and deliberately: the two
+    // lower grounds are now always present whenever `--bg` is, so there is no
+    // longer a case where the guard has only the page ground to go on. It
+    // measures what will actually be painted. Measured, not invented: #545454 is
+    // 7.57:1 on white and 6.76:1 on the `--surface` derived from it.
     const vars = {
       '--vscode-editor-background': '#ffffff',
-      '--vscode-sideBar-background': '#e8e8e8',
       '--vscode-editor-foreground': '#545454',
       '--vscode-foreground': '#545454',
       '--vscode-descriptionForeground': '#545454',
     };
     assert.ok(contrast('#545454', '#ffffff')! >= AAA, 'the ground alone would have passed this');
-    assert.ok(contrast('#545454', '#e8e8e8')! < AAA);
+    assert.ok(contrast('#545454', '#f2f2f2')! < AAA);
 
     const { tokens } = mapVscodeTheme(vars, 'light');
     assert.ok(!('--text' in tokens), 'text passed on --bg and failed on --surface, and was sent anyway');
@@ -260,28 +341,24 @@ describe('the contrast guard', () => {
     assert.ok(!('--dim' in tokens));
     // The surfaces still travel: this is the same trade as everywhere else here.
     assert.equal(tokens['--bg'], '#ffffff');
-    assert.equal(tokens['--surface'], '#e8e8e8');
-
-    // And a ground the mapping did NOT produce is not invented to measure
-    // against: drop the sideBar and the same text is readable on everything
-    // being sent.
-    const only = mapVscodeTheme(
-      { '--vscode-editor-background': '#ffffff', '--vscode-editor-foreground': '#545454' },
-      'light',
-    ).tokens;
-    assert.equal(only['--text'], '#545454');
+    assert.equal(tokens['--surface'], '#f2f2f2');
   });
 
-  it('fails closed on a ground it cannot parse, not only on a missing one', () => {
-    // `--sunken` here is a keyword: legal for the board, unreadable to the
-    // contrast maths. "Cannot prove it is readable" and "readable" are different
-    // answers, and only one of them may send text.
-    const tokens = mapVscodeTheme(
-      { ...READABLE, '--vscode-input-background': 'Canvas' },
-      'light',
-    ).tokens;
-    assert.equal(tokens['--sunken'], 'Canvas');
-    assert.ok(!('--text' in tokens));
+  it('derives grounds the contrast maths can always read', () => {
+    // This replaces a test that fed `input.background: Canvas` — a keyword the
+    // board accepts and the contrast maths cannot read — and asserted the guard
+    // failed closed on it. `--sunken` has no source any more, so that case is
+    // unreachable through it: a derived ground is `#rrggbb` by construction.
+    //
+    // Which is worth pinning rather than just deleting, because it is the reason
+    // the guard's remaining unreadable-ground case is `--bg` alone (the next
+    // test). A ground that arrives as a keyword can no longer poison the three
+    // layers under it.
+    const { tokens } = mapVscodeTheme({ ...READABLE, '--vscode-input-background': 'Canvas' }, 'light');
+    for (const layer of ['--sunken', '--surface', '--raised']) {
+      assert.match(tokens[layer]!, /^#[0-9a-f]{6}$/, `${layer} is not a readable colour`);
+    }
+    assert.ok(!Object.values(tokens).includes('Canvas'), 'a keyword reached the payload as a ground');
   });
 
   it('fails closed when the ground is missing or unreadable', () => {

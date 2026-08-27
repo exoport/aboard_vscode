@@ -143,6 +143,18 @@
         // pin it was already hardened with, which is what confines the same
         // grandchild there.
         const fromHost = e.origin !== 'null';
+        // The sidebar's + button. Guarded like the theme branches and for a
+        // sharper reason: this one draws a MODAL over the board, so an
+        // agent-authored `html` widget reaching `window.top` could otherwise pop
+        // the new-tab sheet whenever it liked. The board checks the sender too —
+        // it only accepts `newtab` from its own parent, which is this page — so
+        // the widget is refused at both ends.
+        if (fromHost && e.data && e.data.type === 'newtab') {
+          if (frame.contentWindow) {
+            frame.contentWindow.postMessage({ __aboard: 'newtab' }, '*');
+          }
+          return;
+        }
         if (fromHost && e.data && e.data.type === 'theme' && e.data.tokens) {
           theme = e.data;
           paint();

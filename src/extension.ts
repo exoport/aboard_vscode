@@ -487,6 +487,33 @@ class Controller implements vscode.Disposable {
   }
 
   /**
+   * The sidebar's `+`: open the panel, then ask the BOARD to open its own sheet.
+   *
+   * The button moved here on 2026-08-27 because under `?chrome=notabs` the
+   * board's own `+` sat alone on a row of the viewer, which is a line of a small
+   * panel spent on one button in the one mode where the host has a title bar
+   * going spare. What did NOT move is the flow: see `BoardPanel.newTab`.
+   *
+   * The panel has to exist first, and it may have to be created — pressing `+`
+   * with nothing open is the ordinary way to start. A page that is not ready yet
+   * drops the request rather than queueing a modal that opens later over
+   * something else, so the human is told plainly instead of being left
+   * wondering, which is the failure mode this whole extension keeps finding.
+   */
+  async newTab(): Promise<void> {
+    const panel = await this.openPanel();
+    if (!panel) {
+      return;
+    }
+    panel.reveal();
+    if (!(await panel.newTab())) {
+      void vscode.window.showInformationMessage(
+        'The board panel is still loading. Try New Tab again in a moment.',
+      );
+    }
+  }
+
+  /**
    * The board told us it switched tabs. Move the highlight, and do not answer.
    *
    * Guarded twice: `reveal` does not run an item's `command`, so it cannot loop
@@ -737,6 +764,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.commands.registerCommand(id, run as (...args: unknown[]) => unknown));
 
   on('aboard.open', () => controller.openPanel());
+  on('aboard.newTab', () => controller.newTab());
   on('aboard.refresh', () => controller.refresh());
   on('aboard.start', () => controller.start());
   on('aboard.nudge', () => controller.notify());
