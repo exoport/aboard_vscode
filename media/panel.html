@@ -42,6 +42,67 @@
       // invariant it relies on is asserted in test/model.test.ts.
       const ALLOWED = frame.getAttribute('src');
 
+      // ---------------------------------------------------------- the theme
+      //
+      // This page is the ONLY place the editor's colours can be read. VS Code
+      // puts the live theme on THIS document's root as `--vscode-*` custom
+      // properties; the board's frame is cross-origin and inherits none of
+      // them, and the extension host is given the theme's KIND and no values at
+      // all. So the page reads them raw and posts them out; `src/theme.ts` maps
+      // them onto the board's own 21 tokens; the mapping comes back here and is
+      // posted into the frame as `{__aboard: 'theme'}`.
+      //
+      // No mapping lives here on purpose — this file stays a bridge. The list
+      // of variable names is substituted by src/panel.ts from VSCODE_VARS, so
+      // the names live beside the mapping that reads them.
+      const VARS = __VARS__;
+      let theme = null;
+      let loaded = false;
+
+      function report() {
+        const style = getComputedStyle(document.documentElement);
+        const vars = {};
+        for (const name of VARS) {
+          vars[name] = style.getPropertyValue(name);
+        }
+        vscode.postMessage({ type: 'theme', vars: vars, bodyClass: document.body.className });
+      }
+
+      function paint() {
+        // Before the frame's first `load` there is no document in it to tell,
+        // and a message posted at one is simply lost — so the last mapping is
+        // held and posted then instead.
+        if (!theme || !loaded || !frame.contentWindow) {
+          return;
+        }
+        frame.contentWindow.postMessage({ __aboard: 'theme', kind: theme.kind, tokens: theme.tokens }, '*');
+      }
+
+      // Every load, not just the first: the board reloads itself when its own
+      // code changes, and a reloaded document has none of the inline custom
+      // properties the last message set. A `goto` is fragment-only and does NOT
+      // reload, which is why `loaded` is never set back to false.
+      frame.addEventListener('load', () => {
+        loaded = true;
+        paint();
+      });
+
+      // Switching between a light and a dark theme changes this class. Switching
+      // between two dark themes does not — it changes the VALUES — which is why
+      // the host also sends `theme-probe` on onDidChangeActiveColorTheme.
+      new MutationObserver(report).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+      // And the values themselves, which VS Code writes as inline custom
+      // properties on THIS root. Watching them is the only signal that needs no
+      // round trip: `theme-probe` travels theme service -> extension host ->
+      // renderer -> here, while the new properties travel theme service -> here,
+      // and nothing orders the two. A probe that overtakes the properties reads
+      // the OLD theme and the panel keeps the previous colours until something
+      // unrelated moves. Cheap to be right about instead: one batched callback
+      // per applyStyles, because the observer coalesces a whole synchronous run
+      // of setProperty calls into a single delivery.
+      new MutationObserver(report).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+
       window.addEventListener('message', (e) => {
         if (e.source === frame.contentWindow) {
           // From the board. The frame is cross-origin by design, so the sender
@@ -58,9 +119,41 @@
         // a changing value there is no hashchange and the click does nothing.
         if (e.data && e.data.type === 'goto' && typeof e.data.src === 'string' && e.data.src.indexOf(ALLOWED) === 0) {
           frame.src = e.data.src;
+          return;
+        }
+        // The two theme branches are guarded, and `goto` deliberately is not.
+        //
+        // The board's `html` tabs are frames INSIDE the frame and can reach
+        // `window.top`, which is this page: `e.source` is then neither the
+        // board nor the host, so without a rule of their own these two would
+        // take a message from an agent-authored widget, which could recolour
+        // the panel and flip its light/dark variant. They are sandboxed
+        // `allow-scripts` without `allow-same-origin`, so their opaque origin
+        // serialises to the literal string "null" — and no host delivery can
+        // have that origin, since the webview host document is served from a
+        // real `vscode-webview:` one.
+        //
+        // Checked by ORIGIN rather than by `e.source`, because what `e.source`
+        // is for a host delivery is an internal of the webview implementation
+        // and a guard built on that fails silently on the version that changes
+        // it. And applied HERE rather than above `goto`: navigation has been
+        // watched working in a real host and the theme has not, so the cost of
+        // being wrong about "null" is a colour that does not arrive, never a
+        // sidebar click that stops moving the panel. `goto` keeps the src-prefix
+        // pin it was already hardened with, which is what confines the same
+        // grandchild there.
+        const fromHost = e.origin !== 'null';
+        if (fromHost && e.data && e.data.type === 'theme' && e.data.tokens) {
+          theme = e.data;
+          paint();
+          return;
+        }
+        if (fromHost && e.data && e.data.type === 'theme-probe') {
+          report();
         }
       });
 
+      report();
       vscode.postMessage({ type: 'ready' });
     </script>
   </body>

@@ -27,6 +27,24 @@
     "onCommand:aboard.notifyWaiting"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Aboard",
+      "properties": {
+        "aboard.theme": {
+          "type": "string",
+          "enum": [
+            "follow",
+            "board"
+          ],
+          "enumDescriptions": [
+            "Derive the board's palette from the colours of your VS Code theme and hand it to the board, so the panel belongs in the window.",
+            "Let the board decide: its own .aboard/theme.json and its dark/light switch. The extension sends no colours."
+          ],
+          "default": "follow",
+          "markdownDescription": "Where the board in the panel gets its colours.\n\nUnder `follow` the extension reads your theme's colours in the panel and posts them to the board, which applies them for this viewer only — nothing is written to the board's state file, and other people looking at the same board are unaffected. Text colours are sent only when they reach the contrast the board pins its own type to (WCAG AAA, 7:1); when your theme does not, the backgrounds still follow it and the board keeps its own readable text."
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {

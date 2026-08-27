@@ -29,6 +29,19 @@ const manifest = JSON.parse(
   contributes: {
     commands: Contribution[];
     menus: Record<string, Contribution[]>;
+    configuration?: {
+      title?: string;
+      properties?: Record<
+        string,
+        {
+          type?: string;
+          enum?: string[];
+          enumDescriptions?: string[];
+          default?: unknown;
+          markdownDescription?: string;
+        }
+      >;
+    };
   };
 };
 
@@ -115,6 +128,36 @@ describe('the two copy commands', () => {
     assert.match(group('aboard.copyId'), /^3_copy@1$/);
     assert.match(group('aboard.copyReference'), /^3_copy@2$/);
     assert.match(group('aboard.copyLink'), /^3_copy@3$/);
+  });
+});
+
+describe('the aboard.theme setting', () => {
+  // A setting that exists only in code is a setting nobody can find: VS Code
+  // builds the Settings UI from `contributes.configuration` and nothing else,
+  // and `getConfiguration('aboard').get('theme')` returns undefined for a
+  // property that was never contributed — which reads exactly like `follow`,
+  // so the default would work and the switch would not.
+  const setting = manifest.contributes.configuration?.properties?.['aboard.theme'];
+
+  it('is contributed, with the two values the extension understands', () => {
+    assert.ok(setting, 'package.json contributes no aboard.theme setting');
+    assert.equal(setting.type, 'string');
+    assert.deepEqual(setting.enum, ['follow', 'board']);
+    assert.equal(setting.default, 'follow');
+    assert.equal(setting.enumDescriptions?.length, setting.enum?.length);
+  });
+
+  it('says what the contrast guard does, because that is the surprising half', () => {
+    // Following the theme and then NOT taking its text colours looks like a bug
+    // if nobody says why — and it is the common case: VS Code's own Dark+ misses
+    // the board's 7:1 pin on `descriptionForeground`.
+    assert.match(setting!.markdownDescription!, /7:1|AAA/);
+  });
+
+  it('is read by src/extension.ts under exactly that name', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'extension.ts'), 'utf8');
+    assert.match(source, /getConfiguration\('aboard'\)/);
+    assert.match(source, /affectsConfiguration\('aboard\.theme'\)/);
   });
 });
 

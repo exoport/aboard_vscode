@@ -30,10 +30,22 @@ import {
   setNote,
   UNNAMED,
 } from './model';
-import { BoardPanel } from './panel';
+import { BoardPanel, type ThemeMode } from './panel';
 import { BoardTreeProvider, type BoardEntry, type Node } from './tree';
 
 const VIEW_ID = 'aboard.tabs';
+
+/**
+ * `aboard.theme` — whether the board follows the editor's theme.
+ *
+ * Read fresh each time rather than cached: the setting is a workspace one, and a
+ * cached copy is a second source of truth for a string VS Code already holds.
+ * An unrecognised value reads as `follow`, the default, because a typo in a
+ * setting should not silently turn a feature off.
+ */
+function themeMode(): ThemeMode {
+  return vscode.workspace.getConfiguration('aboard').get<string>('theme') === 'board' ? 'board' : 'follow';
+}
 
 /**
  * How many times a board's shell may be unreadable before the `?chrome=` probe
@@ -449,6 +461,7 @@ class Controller implements vscode.Disposable {
       return existing;
     }
     const panel = await BoardPanel.create(target, this.context.extensionUri, {
+      themeMode: themeMode(),
       onActive: (tab) => this.revealTab(target, tab),
       onDispose: () => this.panels.delete(target.instanceFile),
     });
@@ -652,6 +665,27 @@ class Controller implements vscode.Disposable {
     void vscode.window.setStatusBarMessage(`Copied ${url}`, 2000);
   }
 
+  /**
+   * The editor's theme changed: ask every open panel to read the colours again.
+   *
+   * The page cannot notice this on its own. It watches its body class, which
+   * only moves between dark and light — two dark themes differ in their values
+   * and in nothing a webview is told about. `onDidChangeActiveColorTheme` is the
+   * only notification either side gets, and it arrives here.
+   */
+  reprobeTheme(): void {
+    for (const panel of this.panels.values()) {
+      panel.probeTheme();
+    }
+  }
+
+  /** `aboard.theme` was edited. */
+  setThemeMode(mode: ThemeMode): void {
+    for (const panel of this.panels.values()) {
+      panel.setThemeMode(mode);
+    }
+  }
+
   async refresh(): Promise<void> {
     // Discovery, not just a re-read: "refresh" is what the human presses after a
     // restart, and a restart can change the port.
@@ -714,6 +748,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => void controller.discover()),
+    // The colours themselves are not here — `ColorTheme` carries a `kind` and
+    // nothing else, and the values exist only inside the webview. This is a
+    // nudge, not a payload: the panel asks its page to read them again.
+    vscode.window.onDidChangeActiveColorTheme(() => controller.reprobeTheme()),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('aboard.theme')) {
+        controller.setThemeMode(themeMode());
+      }
+    }),
   );
 
   // A board appearing or going away is a file event: `serve` writes the instance

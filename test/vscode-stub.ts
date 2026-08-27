@@ -138,6 +138,10 @@ export const probe = {
   clipboard: [] as string[],
   /** The status-bar item as it currently reads, or undefined while hidden. */
   status: undefined as { text: string; tooltip: string } | undefined,
+  /** Workspace settings, keyed `section.key` — see `workspace.getConfiguration`. */
+  settings: new Map<string, unknown>(),
+  colorThemeListeners: [] as Array<(theme: { kind: number }) => void>,
+  configListeners: [] as Array<(e: { affectsConfiguration(section: string): boolean }) => void>,
   reset(): void {
     this.log = [];
     this.notifications = [];
@@ -148,6 +152,9 @@ export const probe = {
     this.badge = undefined;
     this.clipboard = [];
     this.status = undefined;
+    this.settings = new Map();
+    this.colorThemeListeners = [];
+    this.configListeners = [];
   },
 };
 
@@ -259,11 +266,34 @@ export const window = {
   createWebviewPanel: () => {
     throw new Error('the stub has no webview: the panel is one of the two things only a real VS Code can show');
   },
+  // `activate()` subscribes to this so an open panel can be told to read the
+  // editor's colours again. There is no panel here — `createWebviewPanel`
+  // throws on purpose — so the emitter exists to be subscribed to and fired,
+  // not to carry a payload: `ColorTheme` has a `kind` and no values.
+  onDidChangeActiveColorTheme: (fn: (theme: { kind: number }) => void) => {
+    probe.colorThemeListeners.push(fn);
+    return new Disposable(() => {
+      probe.colorThemeListeners = probe.colorThemeListeners.filter((l) => l !== fn);
+    });
+  },
 };
 
 export const workspace = {
   workspaceFolders: [] as Array<{ uri: { scheme: string; fsPath: string } }>,
   onDidChangeWorkspaceFolders: () => new Disposable(),
+  // Settings, as a plain map on the probe. Only `aboard.theme` is read today,
+  // and the fallback is what VS Code does with an absent value: hand back the
+  // default the caller passed, or undefined.
+  getConfiguration: (section: string) => ({
+    get: <T>(key: string, fallback?: T): T | undefined =>
+      (probe.settings.get(`${section}.${key}`) as T | undefined) ?? fallback,
+  }),
+  onDidChangeConfiguration: (fn: (e: { affectsConfiguration(section: string): boolean }) => void) => {
+    probe.configListeners.push(fn);
+    return new Disposable(() => {
+      probe.configListeners = probe.configListeners.filter((l) => l !== fn);
+    });
+  },
   createFileSystemWatcher: () => ({
     onDidCreate: () => new Disposable(),
     onDidChange: () => new Disposable(),

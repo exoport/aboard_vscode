@@ -25,6 +25,12 @@ does, something here is wrong.
 > measure of how far `node --test` can stand in for a real host, and the reason the two
 > rows above stay honest.
 >
+> **Since that pass, one feature: the board follows your VS Code theme** (see *The theme*
+> below). Machine-verified — the mapping, the contrast guard, the page's bridge script run
+> in `node:vm`, the setting as manifest data, and the token names checked against the real
+> binary — and **not yet looked at in a running host**, which is why `docs/handoff.md` §11
+> carries it as an open row rather than a tick.
+>
 > Still open, deliberately: the extension's own SSE backoff watched during a board that
 > will not come back, the old-binary warning (which now needs an `aboard` built before
 > 2026-08-26 03:34 to provoke), and Remote SSH / Codespaces. `.vsix` packaging is gated
@@ -74,8 +80,10 @@ a viewer uses.
 | `GET /` | the shell the panel frames — and, read once per board, the probe for whether this binary understands `?chrome=` (it stamps `document.body.dataset.chrome`). The manifest has no field for it; see below. |
 | `POST /poke` · `GET /waiters` | the notify channel: the view-title bell, a status-bar item and a command. `/waiters` is read on every reload as well as followed on the stream, because the `waiters` frame is only sent when the count CHANGES — a session that parked before the window opened is invisible to the frame alone. |
 | `#tab=<id>` on the board URL | navigation, and "copy link to this tab". |
+| `{__aboard: 'active', tab}` posted OUT of the frame | the board announcing its own tab switches, so the sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the panel. Authenticated by `event.source`, never by origin. |
+| `{__aboard: 'theme', kind, tokens}` posted INTO the frame | the editor's colours, as the board's own 21 tokens. Per viewer, applied as inline custom properties, **written nowhere** — not the state file, not `localStorage`. Governed by the `aboard.theme` setting; see below. |
 
-Three facts the design rests on:
+Four facts the design rests on:
 
 - **`__base` is the `rev`**, a counter the server increments on every accepted
   write — *not* `updatedAt`. A millisecond timestamp is not a token: two writes
@@ -92,6 +100,11 @@ Three facts the design rests on:
   along because the board does not write the hash back when the human switches
   tabs inside it, so the URL can already read `#tab=bb71` while the page shows
   something else.
+- **The editor's colours exist only inside the webview.** VS Code puts the live
+  theme on the webview document's root as `--vscode-*` custom properties; the
+  extension-host API gives `ColorTheme.kind` and no values at all, and the board's
+  iframe is cross-origin so it inherits none of them. That one fact decides the
+  whole shape of the theme feature below.
 
 ### Two things the board owed this extension — both landed
 
@@ -208,6 +221,87 @@ Same shape as the first two: the mechanism worked, the screen said nothing.
 - **More than one board** in one window — a multi-root workspace, or one project
   serving a named board beside its default — gets a row each, so the tree says
   which is which.
+- **The board follows your VS Code theme**, so the panel is not a dark rectangle
+  inside a light IDE. See below for what travels and what deliberately does not.
+
+## The theme
+
+`aboard.theme` is `follow` (the default) or `board`. Under `board` the extension
+sends no colours at all and the board's own `.aboard/theme.json` and dark/light
+switch decide — which is the right setting for someone who deliberately keeps the
+board in the other variant from their editor.
+
+Under `follow`, three hops, and the first one is why it is three:
+
+1. **`media/panel.html` reads** `--vscode-*` off its own root and posts the raw
+   values to the extension host. It is the only place they exist: the host API has
+   `ColorTheme.kind` and no values, and the board's iframe is cross-origin.
+2. **`src/theme.ts` maps** them onto the board's 21 tokens. It is a pure function
+   with no `vscode` import, which is the whole reason the page hands its values
+   out instead of mapping them itself — `media/panel.html` stays a bridge and
+   learns no palette, and every rule below is reachable from `node --test`.
+3. **The page posts `{__aboard: 'theme', kind, tokens}` into the frame**, which the
+   board applies as inline custom properties for that viewer only. Nothing is
+   written: not the board document, not `localStorage`. Two people can look at one
+   board in the same second and disagree about colour while agreeing about content.
+
+It re-reads on four signals, and each catches something the others cannot: the
+frame's `load` (a board that reloaded itself has lost the properties), a
+`MutationObserver` on the body class (a switch between light and dark), a second
+one on the root's inline `style` (two themes of the same kind differ in their
+VALUES and in nothing else), and `window.onDidChangeActiveColorTheme` on the host
+side. The last two overlap on purpose: the host's notice travels theme service →
+extension host → renderer → page while the new properties travel theme service →
+page, and nothing orders the two — a notice that overtakes them reads the old
+theme and the panel keeps the previous colours until something unrelated moves.
+
+**Only the host may set the palette.** The board's `html` tabs are frames inside
+the frame and can reach `window.top`, so `media/panel.html` refuses a *theme*
+message whose origin is the string `null` — which is what an opaque origin
+serialises to, and what `sandbox="allow-scripts"` without `allow-same-origin`
+gives every one of them. It is checked by origin rather than by `event.source`
+because what `event.source` is for a host delivery is an internal of the webview
+implementation, and a bridge built on that fails silently on the version that
+changes it. `goto` deliberately keeps only its src-prefix pin: navigation has been
+watched working in a real host and the theme has not, so a wrong guess about
+`null` must cost a colour rather than a click.
+
+**What is deliberately left out.** A token whose VS Code counterpart is absent is
+not sent, so the board's own value for it stands — a colour somebody chose against
+a palette somebody checked, which a guess is not. `contrastBorder` exists only in
+high-contrast themes, and a theme missing one colour must not cost the board a
+whole palette.
+
+**And the text is guarded.** The board pins its type to WCAG AAA (7:1) because most
+of it is small; an arbitrary VS Code theme does not. `--text`, `--muted` and
+`--dim` are measured against every ground the mapping produced — `--bg`, `--sunken`
+and `--surface`, which is the set the board's own rule names — and if any pair
+misses AAA, none of the three is sent. The page ground alone is not the worst of
+the three and reading only it lets text through that misses the pin exactly where
+most of the board's small type sits, on panels and cards: on a theme with an
+`editor.background` of `#ffffff` and a `sideBar.background` of `#e8e8e8`, an
+`editor.foreground` of `#545454` is 7.6:1 on the ground and 6.2:1 on `--surface`. They travel as a group because a hierarchy assembled
+from two palettes is not a hierarchy — the host's `--text` above the board's
+`--dim` leaves nobody able to tell which grey is the quiet one — and because the
+guard has to fail closed when a value cannot be parsed at all.
+
+This fires on VS Code's own Dark+, where `descriptionForeground` is about 6.1:1 on
+the editor background. That is the honest answer rather than a bug: the
+backgrounds, the accent, the link and the error colour all still follow the
+editor, so the panel belongs in the window, and the board keeps the type it can
+prove is readable. High contrast maps to `dark` or `light` by the body class — a
+high-contrast LIGHT theme carries both `vscode-high-contrast` and
+`vscode-high-contrast-light`, so the specific class is tested first or every one
+of them would come up black inside a white editor.
+
+The 21 token names live in `src/theme.ts` so a name the board does not have
+cannot be written: the mapping table is keyed by a union derived from that list,
+so the mistake is a build that does not finish rather than a colour that silently
+never arrives. That is a copy of something the `aboard` repo owns, and like
+the two hex values in `src/tokens.ts` it is **checked rather than trusted**:
+`test/integration.test.ts` asks the real binary for the list and fails on drift. A
+name the board dropped or renamed arrives there as a warning on the board's own
+console, which is not a console anybody working in VS Code is reading.
 
 ## Layout
 
@@ -221,11 +315,12 @@ src/
   sse.ts                frame parsing and the reconnect delay — no `vscode` import
   launch.ts             which start command, and the PATH probe — no `vscode` import
   messages.ts           the webview envelope, parsed rather than trusted
+  theme.ts              VS Code's colours → the board's 21 tokens — no `vscode` import
   tree.ts               TreeDataProvider, a translation of model.ts
   panel.ts              WebviewPanel host and the bridge
   tokens.ts             the ONE place a colour is copied from aboard's app.css
 media/
-  panel.html            the shell: CSP, one iframe, the ~20-line bridge
+  panel.html            the shell: CSP, one iframe, and the bridge — goto, active, theme
   dot-change.svg        --agent  #a7adf4
   dot-removal.svg       --danger #ff0066
   activity.svg          the activity-bar icon (currentColor; VS Code tints it)
@@ -238,7 +333,8 @@ test/
   copy.test.ts          Copy Reference and Copy Link, pressed as a human presses them
   manifest.test.ts      the contributions as data — the half no runtime test can see
   media.test.ts         the icon files parse, and the check can be seen failing
-  …plus board/boundary/discovery/health/launch/messages/model/sse/tokens .test.ts,
+  panelhtml.test.ts     media/panel.html's bridge script, run in node:vm
+  …plus board/boundary/discovery/health/launch/messages/model/sse/theme/tokens .test.ts,
    one per pure module, named after the file they cover
 ```
 

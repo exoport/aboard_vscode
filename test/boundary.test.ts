@@ -38,9 +38,17 @@ describe('the vscode boundary', () => {
 describe('the pure modules load outside VS Code', () => {
   // Not a formality: requiring them here is what would actually throw if one of
   // them reached for `vscode` transitively through something else.
-  for (const file of ['board', 'model', 'sse', 'launch', 'messages', 'tokens']) {
-    it(`require('${file}')`, () => {
-      assert.doesNotThrow(() => require(path.join(__dirname, '..', 'src', file)));
+  //
+  // The list is READ from the directory rather than written out. It was written
+  // out, and it went stale the first time a pure module was added: `theme.ts`
+  // landed and this list did not, so the one file whose entire job is to be
+  // loadable without VS Code was the one file this check was not loading. A
+  // hand-maintained list of "everything except three" is a list that lies as
+  // soon as somebody adds a fourth.
+  for (const file of fs.readdirSync(src).filter((f) => f.endsWith('.ts') && !ADAPTER.has(f))) {
+    const module = file.replace(/\.ts$/, '');
+    it(`require('${module}')`, () => {
+      assert.doesNotThrow(() => require(path.join(__dirname, '..', 'src', module)));
     });
   }
 });

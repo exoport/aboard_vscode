@@ -42,13 +42,14 @@
 // `after`.
 
 import * as assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 
 import type { Board, Candidate, Doc } from '../src/board';
+import { BOARD_TOKENS } from '../src/theme';
 import type { RenderedRow } from './vscode-stub';
 
 /* ------------------------------------------------------------ the binary */
@@ -247,6 +248,21 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
     } finally {
       sub.dispose();
     }
+  });
+
+  it('agrees with the binary about the board’s 21 token names', () => {
+    // `src/theme.ts` carries the token list so the mapper can be unit-tested
+    // without a board, and so the extension can refuse to send a name the board
+    // does not have. That is a COPY of something the aboard repo owns — the same
+    // shape as the two hex values in `src/tokens.ts` — and the same rule applies:
+    // the copy is checked against its source rather than trusted, because a
+    // token the board dropped or renamed arrives as a console warning on the
+    // board's own console, which nobody working in VS Code is looking at.
+    //
+    // `capabilities` needs no server, so this asks the binary directly.
+    const raw = execFileSync(ABOARD_BIN, ['capabilities', '--format', 'json'], { encoding: 'utf8' });
+    const declared = (JSON.parse(raw) as { theme: { tokens: string[] } }).theme.tokens;
+    assert.deepEqual([...BOARD_TOKENS].sort(), [...declared].sort());
   });
 
   it('says the current binary understands ?chrome=', async () => {

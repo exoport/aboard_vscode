@@ -12,6 +12,30 @@ describe('parseWebviewMessage', () => {
     assert.deepEqual(parseWebviewMessage({ type: 'ready' }), { type: 'ready' });
   });
 
+  it('accepts the page’s report of the editor’s variables', () => {
+    assert.deepEqual(
+      parseWebviewMessage({
+        type: 'theme',
+        vars: { '--vscode-editor-background': '#1f1f1f' },
+        bodyClass: 'vscode-dark',
+      }),
+      { type: 'theme', vars: { '--vscode-editor-background': '#1f1f1f' }, bodyClass: 'vscode-dark' },
+    );
+  });
+
+  it('drops the variables this window does not have, so absent is one case downstream', () => {
+    // `getPropertyValue` answers `''` for a variable the theme never defined,
+    // and the page reports every name it was told to read rather than deciding
+    // for itself. An empty string is not a colour: dropping it here is what lets
+    // `mapVscodeTheme` ask one question — is there a value? — instead of two.
+    const parsed = parseWebviewMessage({
+      type: 'theme',
+      vars: { '--vscode-focusBorder': '', '--vscode-panel-border': '  #2b2b2b  ', '--vscode-charts-red': 7 },
+      bodyClass: '',
+    });
+    assert.deepEqual(parsed, { type: 'theme', vars: { '--vscode-panel-border': '#2b2b2b' }, bodyClass: '' });
+  });
+
   it('refuses everything else — a webview is input, not a caller', () => {
     assert.equal(parseWebviewMessage(undefined), undefined);
     assert.equal(parseWebviewMessage(null), undefined);
@@ -20,5 +44,9 @@ describe('parseWebviewMessage', () => {
     assert.equal(parseWebviewMessage({ type: 'active' }), undefined);
     assert.equal(parseWebviewMessage({ type: 'active', tab: '' }), undefined);
     assert.equal(parseWebviewMessage({ type: 'active', tab: 3 }), undefined);
+    assert.equal(parseWebviewMessage({ type: 'theme', vars: {} }), undefined);
+    assert.equal(parseWebviewMessage({ type: 'theme', bodyClass: 'vscode-dark' }), undefined);
+    assert.equal(parseWebviewMessage({ type: 'theme', vars: null, bodyClass: '' }), undefined);
+    assert.equal(parseWebviewMessage({ type: 'theme', vars: {}, bodyClass: 3 }), undefined);
   });
 });

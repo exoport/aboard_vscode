@@ -6,6 +6,12 @@ on `aboard 93ba033`, and **everything on the list passed but two**. No `.vsix` i
 and none should be without the human's word: that is `§10` of
 `development/planning/plan-2_finish-line.md` in the `aboard` repo.
 
+**Since then, one feature: the board follows the VS Code theme** (§6, plan-2 item 23,
+2026-08-26). The extension reads the editor's colours where they exist — inside the
+webview — maps them onto the board's own 21 tokens and hands them over the frame
+boundary, per viewer and written nowhere. It is machine-verified and **has not been
+looked at in a running host**, so §11 carries it as an open row.
+
 **Four defects have been found by running it, in two passes, and all four are fixed.**
 The first pass found the missing status dots and the doubled tab strip (§10.1) — neither
 was where it looked. Reviewing those fixes found two more (§10.2): the once-per-board
@@ -121,6 +127,18 @@ and calling a paragraph the single source would have been a wish; this is the
 version that breaks when it stops being true. The rename that motivated the
 correction above is exactly the event it is guarding against.
 
+**"The only place this extension duplicates anything" stopped being true on
+2026-08-26**, and the sentence above is left standing because the correction is
+the interesting part. `src/theme.ts` carries the board's **21 token names** so a
+name the board does not have cannot be written: the mapping table in §6 is keyed
+by a union derived from that list, so the mistake is a build that does not finish
+rather than a colour that silently never arrives. It is a
+second copy, and it is held to the same rule rather than to a promise:
+`test/integration.test.ts` runs `aboard capabilities --format json` and fails if
+the list has drifted. The rule is not "never duplicate" — it is **never duplicate
+without a test that breaks when the copy goes stale**, which is what `tokens.ts`
+established and what this follows.
+
 **And a second test, added after the first real run: `test/media.test.ts`.** Reading a
 file as text and finding a hex string in it says nothing about whether a browser will
 draw it, and for a while it did not — both SVGs shipped as malformed XML because the
@@ -141,6 +159,8 @@ is a colour at all.
 | `GET /` | the shell the panel frames — and, read once per board, the probe for whether this binary understands `?chrome=` (it stamps `document.body.dataset.chrome`). The manifest has no field for it; see below. |
 | `POST /poke` · `GET /waiters` | the notify channel — a sidebar button and a badge |
 | `#tab=<id>` on the board URL | navigation, see §6 |
+| `{__aboard: 'active', tab}` posted OUT of the frame | the board announcing its own tab switch, so the sidebar highlight follows `[`, `]` and `1`–`9`. Authenticated by `event.source`, never by origin |
+| `{__aboard: 'theme', kind, tokens}` posted INTO the frame | the editor's colours as the board's own tokens, applied per viewer and written nowhere. See §6 |
 
 **The CAS token is `rev`, not `updatedAt` — corrected here after reading the ported
 server.** The two rows above said `updatedAt`, which was true on the spike and is
@@ -179,8 +199,9 @@ aboard-vscode/
     tree.ts               TreeDataProvider<Node>
     panel.ts              WebviewPanel host + message bridge
     tokens.ts             the two hex values, in one place
+    theme.ts              VS Code's colours → the board's 21 tokens
   media/
-    panel.html            the shell: CSP, one iframe, ~20 lines of script
+    panel.html            the shell: CSP, one iframe, the bridge (goto, active, theme)
     dot-change.svg        --agent #a7adf4
     dot-removal.svg       --danger #ff0066
     activity.svg          the activity-bar icon (currentColor — VS Code tints it)
@@ -321,6 +342,102 @@ under the sidebar tree. That is what the human saw on the first real run. The ex
 now probes the shell once per board (`Board.supportsChrome()`, `shellSupportsChrome()`
 in `board.ts`) and raises exactly one warning naming the board and its version. Why the
 shell and not `/capabilities`: §10.1.
+
+### The theme (`src/theme.ts` + `media/panel.html` + `src/panel.ts`)
+
+The human asked on 2026-08-26 whether the board's colours could come from the VS
+Code theme in use. They can, and the shape is forced by one fact worth stating
+before anything else:
+
+**The colours exist only inside the webview document.** VS Code publishes the live
+theme there as `--vscode-*` custom properties on the root and puts
+`vscode-dark` / `vscode-light` / `vscode-high-contrast` (and, for a light
+high-contrast theme, `vscode-high-contrast-light` alongside it) on the body. The
+**extension-host** API has `ColorTheme.kind` and no values at all, and the board's
+iframe is **cross-origin**, so it inherits none of it. Neither end of this
+extension can read what the middle can see.
+
+So: the page reads, the host maps, the page posts.
+
+1. `media/panel.html` reads the names it is handed (`src/panel.ts` substitutes
+   `__VARS__` from `VSCODE_VARS`) and posts `{type:'theme', vars, bodyClass}` out.
+2. `src/panel.ts` calls `mapVscodeTheme()` and posts the result back in.
+3. The page posts `{__aboard: 'theme', kind, tokens}` into the frame, and the
+   board applies it as inline custom properties **for that viewer only** — nothing
+   is written to the state file or to `localStorage` (the aboard side's own rule;
+   `docs/reference/theme.md` there).
+
+**Why the mapping is not in the page**, where the values are: `media/panel.html`
+is a bridge and owns no palette, and a function in a `<script>` inside an HTML
+file is reachable by neither `tsc` nor `node --test` without a `node:vm` harness
+around it. It lives in `src/theme.ts` — no `vscode` import, the same line
+`board.ts` and `model.ts` sit on — and the page is tested separately for the one
+thing it does do (`test/panelhtml.test.ts`, which lifts the script out and runs it
+in `node:vm`). The alternative considered and rejected was inlining a second
+esbuild bundle of `theme.ts` into the page: it removes the round trip and adds a
+build output that must be kept in step with the file that embeds it, to test a
+function in a bundled form nobody reads.
+
+**Four signals re-read the theme**, and each catches something the others do not:
+
+- the frame's `load` — a board that reloaded itself (its own self-heal on a code
+  change) has lost the inline properties, and nothing else says so;
+- a `MutationObserver` on the body class — the human switched between a light and
+  a dark theme;
+- a second one on `document.documentElement`'s inline `style` — two themes of the
+  same KIND differ in their values and in nothing else, and this is exactly where
+  VS Code writes them;
+- `window.onDidChangeActiveColorTheme` on the host, which posts `theme-probe`.
+
+The last two look redundant and are not. The host's notice travels theme service
+→ extension host → renderer → page; the new properties travel theme service →
+page; **nothing orders the two**, so a notice that overtakes the properties reads
+the OLD theme and the panel keeps the previous colours until something unrelated
+moves. The observer cannot arrive early. The probe stays because it is the one
+signal that survives a VS Code that stops writing those properties inline.
+
+**Only the host may set the palette.** The board's `html` tabs are frames INSIDE
+the frame and can reach `window.top`, which is this page — `e.source` is then
+neither the board nor the host, so both theme branches would have taken the
+message and an agent-authored widget could recolour the panel and flip its
+light/dark variant. They are sandboxed `allow-scripts` without
+`allow-same-origin`, so their opaque origin serialises to the literal string
+`"null"`, and the page refuses that one origin before any host branch runs.
+**By origin and not by `e.source`**: what `e.source` is for a host delivery is an
+internal of the webview implementation, and a guard built on that is this bridge
+failing silently on the VS Code version that changes it.
+
+**And it guards the two theme branches only — `goto` is deliberately left on its
+src-prefix pin.** The same rule would fit there, and the reason not to is the one
+this file keeps re-learning: navigation has been watched working in a real host
+(§11) and the theme has not. If the reasoning about `"null"` is wrong, the cost
+has to be a colour that does not arrive — a feature §11 already says nobody has
+looked at — and never a sidebar click that stops moving the panel. The prefix pin
+is what confines the same grandchild there, and it is unchanged.
+
+**The contrast guard, and why it is not optional.** The board pins text to WCAG
+AAA (≥7:1) because most of its type is small; an arbitrary VS Code theme does not.
+`--text`, `--muted` and `--dim` are measured against **every ground the mapping
+produced** — `--bg`, `--sunken` and `--surface`, which is the set
+`docs/reference/theme.md` names, `--raised` being outside the pin there too — and
+travel as a group: if any pair misses AAA, none of the three is sent and the board
+keeps its own. Reading only the page ground was the first version of this, and the
+page ground is not the worst of the three: with an `editor.background` of
+`#ffffff` and a `sideBar.background` of `#e8e8e8`, an `editor.foreground` of
+`#545454` is 7.6:1 on the ground and 6.2:1 on `--surface` — so it shipped text
+that missed the pin exactly where most of the board's small type sits, on panels
+and cards. It fires on **VS Code's own Dark+**, where `descriptionForeground` is
+~6.1:1 on the editor background. That is the feature working: the backgrounds, the
+accent, the link and the error colour still follow the editor, so the panel
+belongs in the window, and the type stays readable. A token whose VS Code
+counterpart is absent is likewise left out rather than guessed, so the board's own
+value stands.
+
+**The setting is `aboard.theme`**: `follow` (default) or `board`. `board` posts
+nothing and lets the board's `.aboard/theme.json` and its own switch decide.
+Switching to it does not just go quiet — the board is holding the last tokens as
+inline properties and nothing expires them, so the panel posts an empty `tokens`
+map, which is the board's own "take them back off".
 
 Panel options that matter: `enableScripts: true`, `retainContextWhenHidden: true`
 (without it, hiding the panel destroys the page and rebuilds it on reveal — the board
@@ -850,6 +967,29 @@ running host, and until it is, the honest mark is not a tick.
       (`test/manifest.test.ts`). What is not proven: that both items appear on the
       right-click menu in that order, which is a `menus` contribution only a host
       evaluates.
+- [ ] **The board follows the VS Code theme.** Switch the editor to a light theme
+      and the panel goes light with it, on the next repaint and with no reload;
+      switch to a high-contrast LIGHT theme and it goes light rather than dark
+      (the body carries both HC classes, and reading the generic one first is the
+      mistake that makes every HC light theme come up black); set
+      `aboard.theme` to `board` and the panel returns to the board's own palette,
+      back to `follow` and it follows again. Asserted headlessly as far as it
+      goes: the mapping and the guard (`test/theme.test.ts`), the page's half in
+      `node:vm` (`test/panelhtml.test.ts`), the setting as data
+      (`test/manifest.test.ts`), and the 21 token names against the real binary
+      (`test/integration.test.ts`). What none of that can show is a webview
+      actually defining `--vscode-*`, or the colours landing on screen — and the
+      expected result there is deliberately NOT full fidelity: on VS Code's own
+      Dark+ the text colours are withheld by the contrast guard, so the board's
+      backgrounds should match the editor while its type stays the board's. A
+      panel whose text went grey-on-grey is the guard failing, not the theme
+      arriving. Two things to watch for specifically, both added in review and
+      both unobservable headlessly: switching between two DARK themes must
+      recolour the panel (the root's inline `style` is watched for exactly that,
+      and it is the signal that cannot arrive before the values do), and an
+      `html` tab must still paint — its messages to `window.top` are now refused
+      for the theme branches by their `"null"` origin, and nothing else it does
+      goes through that path.
 - [ ] The stream survives a board restart, and a board that will NOT come back stops
       being retried every second (kill `aboard serve` and watch the Aboard output
       channel: the reconnect notices should space out, not tick once a second). The
