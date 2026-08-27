@@ -29,7 +29,16 @@
     </style>
   </head>
   <body>
-    <iframe id="frame" src="__SRC__" title="Aboard"></iframe>
+    <!-- `allow` delegates the clipboard-write permission down to the board, which
+         is a cross-origin frame in here. The board's markup renderer copies a
+         cropped region of an image as a PNG, and without this the browser
+         refuses the write and the human gets a button that appears to do
+         nothing — which is this extension's recurring failure mode, so the board
+         reports the refusal in its own status line rather than swallowing it.
+         Whether VS Code's own webview passes the permission down to a nested
+         frame is not something a test here can answer; the board failing loudly
+         is what makes that answerable by looking. -->
+    <iframe id="frame" src="__SRC__" title="Aboard" allow="clipboard-write"></iframe>
     <script nonce="__NONCE__">
       const vscode = acquireVsCodeApi();
       const frame = document.getElementById('frame');

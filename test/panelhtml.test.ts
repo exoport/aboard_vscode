@@ -339,6 +339,17 @@ describe('the panel page', () => {
     assert.deepEqual(plain(themed(page)[0]!.data['tokens']), { '--bg': '#101010' });
   });
 
+  it('delegates clipboard-write to the board frame', () => {
+    // The board's markup renderer copies a cropped image region to the
+    // clipboard. In here the board is a cross-origin frame, so the permission
+    // has to be delegated by `allow` or the write is refused — and a copy button
+    // that silently does nothing is the exact shape of every defect this
+    // extension has shipped. Asserted as page source because no stub can tell
+    // whether a real webview honours it.
+    const html = fs.readFileSync(PAGE, 'utf8');
+    assert.match(html, /<iframe[^>]*\ballow="[^"]*clipboard-write/, 'the board frame cannot reach the clipboard');
+  });
+
   it('has every placeholder substituted by src/panel.ts, and no others', () => {
     // The page is a template, and an unsubstituted `__VARS__` is not a missing
     // colour — it is a SyntaxError in the only script on the page, which takes
