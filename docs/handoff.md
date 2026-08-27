@@ -9,8 +9,9 @@ and none should be without the human's word: that is `§10` of
 **Since then, one feature: the board follows the VS Code theme** (§6, plan-2 item 23,
 2026-08-26). The extension reads the editor's colours where they exist — inside the
 webview — maps them onto the board's own 21 tokens and hands them over the frame
-boundary, per viewer and written nowhere. It is machine-verified and **has not been
-looked at in a running host**, so §11 carries it as an open row.
+boundary, per viewer and written nowhere. It was **observed working by the human on 2026-08-26** in an Extension Development
+Host: the board's own dark/light switch works inside the panel, and the panel follows
+a VS Code theme change. §11 ticks it, keeping the two sub-cases nobody has looked at.
 
 **Four defects have been found by running it, in two passes, and all four are fixed.**
 The first pass found the missing status dots and the doubled tab strip (§10.1) — neither
@@ -967,7 +968,11 @@ running host, and until it is, the honest mark is not a tick.
       (`test/manifest.test.ts`). What is not proven: that both items appear on the
       right-click menu in that order, which is a `menus` contribution only a host
       evaluates.
-- [ ] **The board follows the VS Code theme.** Switch the editor to a light theme
+- [x] **The board follows the VS Code theme.** Observed by the human on 2026-08-26:
+      the board's dark/light switch works inside the panel, and switching the VS
+      Code theme recolours the panel. Still unobserved within this row: a
+      high-contrast LIGHT theme, and `aboard.theme: board`. The original
+      description follows. Switch the editor to a light theme
       and the panel goes light with it, on the next repaint and with no reload;
       switch to a high-contrast LIGHT theme and it goes light rather than dark
       (the body carries both HC classes, and reading the generic one first is the

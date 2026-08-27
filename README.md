@@ -262,8 +262,9 @@ serialises to, and what `sandbox="allow-scripts"` without `allow-same-origin`
 gives every one of them. It is checked by origin rather than by `event.source`
 because what `event.source` is for a host delivery is an internal of the webview
 implementation, and a bridge built on that fails silently on the version that
-changes it. `goto` deliberately keeps only its src-prefix pin: navigation has been
-watched working in a real host and the theme has not, so a wrong guess about
+changes it. `goto` deliberately keeps only its src-prefix pin: navigation had been
+watched working in a real host and the theme had not when this was decided (it has
+since — 2026-08-26), so a wrong guess about
 `null` must cost a colour rather than a click.
 
 **What is deliberately left out.** A token whose VS Code counterpart is absent is
