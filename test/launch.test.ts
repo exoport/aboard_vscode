@@ -24,8 +24,9 @@ describe('chooseStartCommand', () => {
   });
 
   it('prefers aboard when both are there', () => {
-    // Recorded in docs/handoff.md §6: plan-1 states no preference, so this is
-    // the extension's call and it is a call, not an accident of ordering.
+    // Recorded in README.md, "Starting a board when there is not one": aboard's
+    // own port plan states no preference, so this is the extension's call — and it
+    // is a call, not an accident of ordering.
     assert.equal((chooseStartCommand({ aboard: true, ape: true }) as { display: string }).display, 'aboard serve');
   });
 

@@ -11,8 +11,9 @@ none should ever be added; everything it shows comes from the running `aboard` (
 does, something here is wrong.
 
 > **Status: verified in a real VS Code on 2026-08-26 (M6 step 1); `.vsix` not yet
-> packaged.** The human worked the hand-verification checklist (`docs/handoff.md` §11)
-> through in an Extension Development Host against `/home/diegos/_dev/ai/borrar` on
+> packaged.** The human worked the hand-verification checklist (*What has been observed
+> in a real VS Code*, below) through in an Extension Development Host against
+> `/home/diegos/_dev/ai/borrar` on
 > `aboard 93ba033`, and **everything on it passed but two**: the notify bell never lit,
 > and "Copy Reference" copied a link. Both are fixed here — see *What running it found*
 > below — and both fixes are covered by tests, including one that parks a real
@@ -28,8 +29,9 @@ does, something here is wrong.
 > **Since that pass, one feature: the board follows your VS Code theme** (see *The theme*
 > below). Machine-verified — the mapping, the contrast guard, the page's bridge script run
 > in `node:vm`, the setting as manifest data, and the token names checked against the real
-> binary — and **not yet looked at in a running host**, which is why `docs/handoff.md` §11
-> carries it as an open row rather than a tick.
+> binary — and it has **since been looked at in a running host**: the board's own switch
+> works inside the panel and the panel follows a VS Code theme change. A high-contrast
+> LIGHT theme and `aboard.theme: board` are still unwatched.
 >
 > Still open, deliberately: the extension's own SSE backoff watched during a board that
 > will not come back, the old-binary warning (which now needs an `aboard` built before
@@ -108,8 +110,9 @@ Four facts the design rests on:
 
 ### Two things the board owed this extension — both landed
 
-Both were `handoff-board-for-vscode-panel.md` §4–§5 in the `aboard` repo, and both
-**shipped on 2026-08-26** (that repo's plan-2 item 7). This repository needed no change
+Both are specified in the `aboard` repo's `docs/reference/http-api.md` — `?chrome=` and
+"What the shell posts to an embedder" — and both **shipped on 2026-08-26**. This
+repository needed no change
 to take them: it had coded for both from the start, because each was free to send and
 would only ever have cost a change here later.
 
@@ -170,7 +173,7 @@ surviving a write.
 
 ### And the second pass through the checklist
 
-Two more, found by the human working the rest of `docs/handoff.md` §11 on 2026-08-26.
+Two more, found by the human working the rest of the verification list on 2026-08-26.
 Same shape as the first two: the mechanism worked, the screen said nothing.
 
 - **The notify bell never lit.** *"The poke in the terminal exited ok, the notification
@@ -223,6 +226,36 @@ Same shape as the first two: the mechanism worked, the screen said nothing.
   which is which.
 - **The board follows your VS Code theme**, so the panel is not a dark rectangle
   inside a light IDE. See below for what travels and what deliberately does not.
+
+### Starting a board when there is not one
+
+Discovery walks **up** from each workspace folder looking for
+`.aboard/run/instance.json` (and `instance.<name>.json` for a named board on the same
+project), mirroring aboard's own root-discovery loop rather than checking only the
+folder's immediate root — a workspace opened on a subdirectory must still find its board.
+Each candidate is confirmed with `GET /health`, keeping it only where `health.project`
+equals the root it was found under, which rules out both realistic failures: a stale
+instance file from a server that died, and another project's board answering on a port
+somebody guessed.
+
+When that finds **nothing running**, the welcome view offers to start one — and it picks
+the command from what is actually on `PATH` rather than guessing:
+
+1. `aboard` on `PATH` → offer **`aboard serve`** in a new terminal. Plain; there is no
+   force-restart flag to reach for, and `aboard serve` refuses to start beside this
+   project's own board on its own.
+2. Otherwise `ape` on `PATH` → offer **`ape aboard serve`**.
+3. Neither → an **error naming both commands**, never a silent nothing. An empty tree with
+   no explanation is the worst version of this, and the human is one install away.
+4. **Both present → prefer `aboard`.** This is a judgement call and it is recorded as one:
+   aboard's own port plan states no preference between the two hosts when both are
+   available. `aboard` wins because it is the dedicated binary and the whole HTTP contract
+   above is written against it; `ape aboard` exists for projects that standardise on `ape`
+   for everything, and is the right answer when it is the one that is there. Change it
+   here and in `src/launch.ts` together, or the comment and the code drift.
+
+After launching either, `/health` is polled for a few seconds rather than assumed
+successful.
 
 ## The theme
 
@@ -304,6 +337,138 @@ the two hex values in `src/tokens.ts` it is **checked rather than trusted**:
 name the board dropped or renamed arrives there as a warning on the board's own
 console, which is not a console anybody working in VS Code is reading.
 
+## Decisions worth keeping
+
+Six calls that shaped this repository. They are recorded because each one has a plausible
+opposite that somebody will propose again.
+
+**Three hard rules, and one of them is the whole point of the extension existing.**
+
+- **Never touch `.aboard/aboard.json` on disk.** Every write goes through
+  `POST /aboard.json` with compare-and-set — the mechanism that stops a concurrent agent's
+  work from being destroyed with no error.
+- **Never assume you should launch a new server.** Check the instance record and `/health`
+  first; a second `aboard serve` on a project that already has one is two servers on two
+  ports for one board, which is confusing for no benefit.
+- **Write as `__by: "human"`, because a human clicked.** Never `agent-*`. Deleting a tab,
+  dismissing a change marker and answering a removal request are gestures the server
+  *refuses* from an agent — by carrying the old value forward, with a `200`. Offering them
+  here is not a liberty this extension takes; it is the point of being the human's client.
+  Get the field wrong and every one of them becomes a silent no-op.
+
+**A separate repository, deliberately.** aboard is Go with an embedded web tree and a
+dependency-light build; dropping `package.json`, `node_modules`, TypeScript and esbuild
+into that tree would quietly repeal that choice. This extension also versions on a
+different clock and has a different audience. What remains is a **contract, not a shared
+file** — the table above — which is why either side can move without the other.
+
+**A native `TreeView`, not a `WebviewView` reusing the board's stylesheet.** The webview
+route buys pixel-identical colour and costs everything a native tree gets for free:
+keyboard navigation, type-to-filter, collapse state, `TreeView.badge`, context menus,
+`reveal`, and following the user's own VS Code theme. The one place a native tree pays a
+real cost is colour fidelity for the two status dots, and that is paid with two 16×16 SVGs
+carrying the board's own token values.
+
+**Never duplicate without a test that breaks when the copy goes stale.** That is the rule,
+and it is not "never duplicate" — this repository holds two copies of things aboard owns
+and both are held to it. `src/tokens.ts` has the two dot colours and `test/tokens.test.ts`
+fails when an SVG drifts from it; `src/theme.ts` has the board's 21 token names and
+`test/integration.test.ts` asks the real binary for the list and fails on drift. Writing a
+hex value into two SVGs and calling a paragraph the single source would have been a wish.
+
+**And keep the two icon tests apart**, because they ask different questions.
+`tokens.test.ts` asks whether the colour is *right*; `media.test.ts` asks whether there is
+a colour *at all*. Reading a file as text and finding a hex string in it says nothing about
+whether a browser will draw it — and for a while it did not, because both SVGs shipped as
+malformed XML.
+
+**`test/vscode-stub.ts` must never become a VS Code emulator.** It models only what the
+extension actually depends on: a synchronous `EventEmitter`, a TreeView that re-walks
+`getChildren`/`getTreeItem` when `onDidChangeTreeData` fires, `setContext`, notifications
+and clipboard writes recorded rather than performed, the status-bar item, and the
+provider's own node behind each rendered row — that last one because it is exactly what VS
+Code hands a `view/item/context` command, so a test can press a menu item the way a human
+does rather than calling the function under it. **`panel.ts` stays deliberately
+uncovered**: covering it would mean a fake webview, and that is precisely where a stand-in
+becomes an emulator.
+
+## What has been observed in a real VS Code
+
+Nothing below can be asserted headlessly. This is the record of what a human has
+actually watched happen, with the date, and it is the honest half of every status claim
+in this file. **`[x]`** was observed; **`[~]`** means the part that can be driven against
+a real board is proven and the part that needs a human looking at VS Code is not — a full
+tick there would claim more than anybody has seen; **`[ ]`** is still open.
+
+The list was worked through twice on **2026-08-26**, both times in an Extension
+Development Host against `/home/diegos/_dev/ai/borrar`. The first pass reached the top
+four rows and stopped on two defects; the second went through everything left and passed
+all of it but two, which are the two `[~]` rows. Both of those are fixed, and neither fix
+has been looked at in a running host.
+
+- [x] The extension activates and the tree lists every tab, in `aboard.json` order, each with its id as the description. (2026-08-26)
+- [x] A board started AFTER the window was already open still appears — the `**/.aboard/run/instance*.json` watcher fires and discovery re-runs. (2026-08-26)
+- [x] The board renders inside the panel. (2026-08-26)
+- [x] Tab switching does not reload the page. (2026-08-26) This is the mechanism the whole navigation design rests on: a fragment-only `src` change fires `hashchange` without reloading, so no SSE stream drops and no renderer remounts.
+- [x] The panel survives being dragged to another editor group, and being hidden and revealed — `retainContextWhenHidden`. (2026-08-26)
+- [x] `html` tabs paint inside the panel, with a clean console. (2026-08-26) The webview console is the last word here and it was read: `connect-src 'none'` plus the `vscode-webview:` ancestor list is the containment, and neither showed up as a blocked request.
+- [x] Dots appear within a second of an agent's write. (2026-08-26, third run) A periwinkle dot on a touched tab and a red one on a removal request, arriving with no Refresh after the stream fix. The first two runs needed Refresh — first the malformed SVGs, then Node 24's inspector killing the stream on every string chunk under F5. Dismiss from the sidebar was watched in the same session.
+- [x] The board's own tab strip does NOT appear inside the panel on a current binary. (2026-08-26, against `aboard de7773f`)
+- [x] A removal request shows red and both answers do what they say. (2026-08-26, fully) First through the board's own banner inside the panel, then through the sidebar's own Approve / Deny items. Both were proven headlessly first against a real spawned board — deliberately a server test rather than a unit one, because the same edit from an agent gets the tab RESTORED with a `pendingRemoval`, so a test that only checks what the edit does to a JSON object proves nothing about what the board does with it.
+- [x] Rename and Set note from the sidebar. (2026-08-26) Both are ordinary writes; what is being checked is that they land as the HUMAN, since an agent renaming a tab is allowed and a wrong `__by` here would not fail visibly the way Dismiss does.
+- [x] `]` inside the panel moves the tree highlight. (2026-08-26) The `{__aboard: 'active', tab}` message arriving and `reveal` acting on it.
+- [x] Two viewers — the panel and a plain browser — open at once, disagreeing about chrome and agreeing about content, each on its own active tab. (2026-08-26) This row is the one that proves neither leaks into the state file.
+- [x] Restarting the `aboard` server on the same root while the panel is open: the page reloads itself, the tree stays alive, no stale `app.css`. (2026-08-26)
+- [x] A forced `409` — a write from the browser mid-edit — warns rather than clobbers. (2026-08-26)
+- [x] The "Start the board" fallback: with nothing running the welcome view offers it, it picks the command from what is on `PATH`, and the tree fills in once the board answers. (2026-08-26)
+- [x] The board follows the VS Code theme. (2026-08-26) The board's own dark/light switch works inside the panel, and switching the VS Code theme recolours it. Still unobserved inside this row: a high-contrast LIGHT theme, and `aboard.theme: board`. Note that full fidelity is **not** the expected result — on VS Code's own Dark+ the text colours are withheld by the contrast guard, so the backgrounds should match the editor while the type stays the board's. A panel whose text went grey-on-grey would be the guard failing, not the theme arriving.
+- [~] **Notify lights only when a session is genuinely parked on `aboard wait`, and pressing it releases that session.** Failed on 2026-08-26 and fixed — see *What running it found*. Proven: `test/integration.test.ts` parks a REAL `aboard wait` against a real spawned board, asserts `aboard.waiting` flips true, presses notify through the controller, and asserts the CLI exits 0 and the key flips back. Not proven: that VS Code draws the `$(bell-dot)` entry from that key, which only a running host can show.
+- [~] **Copy Reference copies a reference, and Copy Link copies a link.** Failed on 2026-08-26 and fixed. Both commands are pressed through their registered handlers with the tree node VS Code would hand them (`test/copy.test.ts`), and the two titles are asserted as manifest data (`test/manifest.test.ts`). Not proven: that both items appear on the right-click menu in that order, which is a `menus` contribution only a host evaluates.
+- [ ] The stream survives a board restart, and a board that will NOT come back stops being retried every second. Kill `aboard serve` and watch the Aboard output channel: the reconnect notices should space out, not tick once a second. The row about the page reloading covers the restart the *board* notices; this one is the extension's own backoff, which is a different mechanism and is still unwatched.
+- [ ] *Optional:* the old-binary warning. A board served by a binary that predates `?chrome=` raises exactly one warning naming the board and its version. Asserted by `test/oldboard.test.ts`, including the in-flight-write case that used to fire it three times, but never seen in a real host — and increasingly hard to arrange, since it needs an `aboard` built before 2026-08-26 03:34.
+- [ ] *Optional:* Remote SSH / Codespaces. `asExternalUri` + `portMapping` are coded and the webview CSP lists the externalised origin alongside both loopback spellings. Only a real remote window can confirm it, and nothing else here depends on it.
+
+**Rebuild before pressing F5, and reload the dev-host window after an edit.**
+`.vscode/launch.json` runs `npm: build` as a preLaunchTask, so the first is handled; the
+second is not, because the build is one-shot rather than a watcher (a watcher never
+"finishes" and VS Code would sit waiting for it). A dev host left open across an edit is
+running the previous bundle, silently — which is the same class of mistake as every
+defect in *What running it found*.
+
+## What must be hardened before any public listing
+
+The pure-logic half of this list is handled and unit-tested; the entries needing a real
+host say so.
+
+| Case | Status |
+| --- | --- |
+| No workspace open; multi-root workspaces; a folder with no `.aboard/` | **Handled.** Discovery over zero folders returns nothing, two folders under one project root count as one board, and a folder with no `.aboard/` yields nothing — with `aboard.hasProject` picking between "no board is running" and "no project here", each with its own welcome text, so the two silences are distinguishable. |
+| `instance.json` present but the server is dead, or answering for another project | **Handled and kept.** A candidate whose `/health` names another project, or does not answer, is dropped with the reason written to the Aboard output channel. |
+| The port is occupied by something that is not a board | **Handled.** `app` must be `aboard` or `ape-aboard`, and a non-JSON answer is refused by the same path. |
+| Two boards for two folders open at once | **Handled.** With more than one board the tabs sit under a row per board, labelled by folder and by `--name` where a project serves a named board beside its default. With exactly one, the tabs are top-level — a single always-open parent row is a wasted line. |
+| Schema drift | **Handled.** The document's `version` is compared against `/capabilities`.`schema`, both read from the same server, so no schema number is hardcoded here. A mismatch is a warning notification, once, plus `schema mismatch` on the board's row for as long as it is true. |
+| Errors surfaced as notifications, never swallowed | **Handled.** Every action failure is a notification carrying the server's own sentence; background noise — a dropped stream, an ignored instance file — goes to the output channel rather than interrupting. |
+| Remote SSH / Codespaces / vscode.dev | **Coded, UNVERIFIED.** `asExternalUri` and `portMapping` are set and the webview CSP's `frame-src` lists the externalised origin alongside both loopback spellings. On vscode.dev the framing origin is `https://*.vscode-cdn.net`, which aboard's CSP already lists. Only a real remote window can confirm it. |
+
+Five things this list once called "handled" and were not, each found by review against a
+real `aboard serve` rather than reasoned about, and all five fixed. They share the shape
+everything here shares — **the failure mode is silence**, and every one left the sidebar
+looking merely quiet, which is the same picture as a board with nothing new on it.
+
+- **A request could never settle.** `httpRequest` listened for `data` and `end` and nothing else, so a response cut off mid-body left the promise pending forever — and `discover()` holds its re-entrancy flag across that await, so ONE truncated answer stopped every future discovery for the life of the window. Every path settles exactly once now, and `test/board.test.ts` asserts it with a real socket destroy under an explicit timeout, because before the fix that test did not fail — it hung.
+- **A board that stopped left its tabs in the tree.** `discover()` only rendered from inside `reloadAll()`, which iterates the entries, so with zero boards it rendered nothing at all and the dead board's tabs stayed listed and clickable. The welcome view could not appear either, because a view with children never shows one.
+- **A named board with a dot in its name was invisible.** The board's own name rule allows dots, so `--name v1.2` writes `instance.v1.2.json`; the discovery regex used `[^.]+` for the name segment and skipped it. Reproduced with two live servers on one project.
+- **A sole board with no document showed a blank sidebar.** With exactly one board its tabs are top-level, so when `/aboard.json` failed there was nothing to draw and no row to carry the reason. The board's own row is shown now, with the problem as its description.
+- **The waiter count started as a guess.** The `waiters` frame is only sent when the count CHANGES, so a session that parked before the window opened was invisible: the status bar said "nothing to notify" while somebody was blocked on exactly that button. `/waiters` is read once per refresh and the frames keep it current.
+
+One hardening change came with them: `media/panel.html` accepts a `goto` only for a src
+that starts with the one the frame was rendered with. The board's `html` tabs are
+sandboxed frames that can reach `window.top`, and that handler is the only thing on the
+page that navigates anything. The CSP already pinned the origin; this pins the base path
+too. The invariant it rests on — that every `frameSrc()` value starts with the no-tab
+form — is asserted in `test/model.test.ts`, since `panel.html` is a file no unit test can
+load.
+
 ## Layout
 
 ```
@@ -384,12 +549,42 @@ processes of their own and cannot raise a `DeprecationWarning` in this one. Gues
 an owner from the warning text is the mistake; the process boundary is why it cannot
 work.
 
-## Install
+## Install, and the publishing ladder
 
-There is no `.vsix` yet, deliberately — see `docs/handoff.md` §9. The loop today is
-F5 from this repo, which opens an Extension Development Host. Open VSX later if
-someone asks; never the Marketplace, because to anyone without an `aboard` project
-this installs, finds nothing, and does nothing.
+**Today — no packaging at all.** F5 from this repository opens an Extension Development
+Host, and that is the whole loop. Packaging is gated on the maintainer's own run.
 
-`docs/handoff.md` carries the full design, the milestone plan, and the reasoning
-behind every decision summarised above.
+**Then — a local `.vsix`.**
+
+```sh
+npm i -D @vscode/vsce
+npx vsce package                                     # → aboard-vscode-0.1.0.vsix
+code --install-extension aboard-vscode-0.1.0.vsix --force
+```
+
+That needs only what is already here: `package.json` with `name`, `publisher`, `version`,
+`engines.vscode`, `main`, `contributes` and `activationEvents`; plus `README.md`, a
+`LICENSE` (`vsce` complains without one), and a `.vscodeignore` keeping `src/`,
+`node_modules/` and the esbuild config out of the package.
+
+**Later — Open VSX, if and only if somebody else wants it.** It needs an Eclipse
+Foundation account with the Publisher Agreement signed, a namespace, and a token:
+
+```sh
+npx ovsx create-namespace <publisher> -p "$OVSX_TOKEN"
+npx ovsx publish aboard-vscode-0.1.0.vsix -p "$OVSX_TOKEN"
+```
+
+**Not the VS Code Marketplace — deliberate, not an omission.** This extension is coupled
+to a workspace that contains an `aboard` (or `ape aboard`) project. To a stranger it
+installs, finds nothing, and does nothing, which is a bad thing to put in a store people
+browse. Open VSX first, and only on request.
+
+**The publisher is `exoport`**, matching the Go module path `github.com/exoport/aboard`.
+It is only a namespace today — nothing is published anywhere — but it is baked into the
+`.vsix` filename and would become an Open VSX namespace later, so it is recorded here
+rather than left to whoever runs `vsce` first. The display name is **Aboard Panel** and
+the extension id is `aboard-vscode`; both are judgement calls made when the scaffold
+landed, and both should stay stable now that they are chosen. The alternative was leaving
+the publisher out until publishing day, and `vsce package` refuses without one — so the
+trade was "decide it now" against "decide it under time pressure".

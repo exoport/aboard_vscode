@@ -30,8 +30,9 @@ export type FromWebview =
 
 /**
  * The board announces its own tab switches ([ ], 1–9, and its choice on load) as
- * `{__aboard: 'active', tab}` — §5 of `handoff-board-for-vscode-panel.md`, landed
- * on the aboard side (plan-2 item 7). It is sent when the active tab CHANGES, not
+ * `{__aboard: 'active', tab}` — the aboard side of this landed on 2026-08-26 and is
+ * documented in that repo's `docs/reference/http-api.md`, "What the shell posts to an
+ * embedder". It is sent when the active tab CHANGES, not
  * on every repaint, so a receiver may act on each message it gets. The webview
  * authenticates it by `e.source` (the frame is cross-origin by design, so the
  * origin is not the check) and forwards it in this shape.

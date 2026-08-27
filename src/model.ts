@@ -177,8 +177,9 @@ export function referenceText(name: string | undefined, tabId: string): string {
 /**
  * The panel's iframe src.
  *
- * `?chrome=notabs` hides the board's own tab strip — §4 of
- * `handoff-board-for-vscode-panel.md`, landed on the aboard side on 2026-08-26.
+ * `?chrome=notabs` hides the board's own tab strip — landed on the aboard side on
+ * 2026-08-26, and specified in that repo's `docs/reference/http-api.md` under
+ * "`?chrome=`".
  * A board OLDER than that ignores the parameter, because an unknown query
  * parameter is not an error, and then the panel shows two tab strips: fully
  * functional and visibly wrong, with nothing anywhere saying why. That is what

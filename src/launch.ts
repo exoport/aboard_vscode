@@ -19,9 +19,10 @@ export type StartChoice =
  * `aboard` wins when both are present: it is the dedicated binary, and the whole
  * HTTP contract this extension is written against is `aboard`'s. `ape aboard`
  * exists for projects that standardise on `ape` for everything, and is the right
- * answer only when it is the one that is there. (Plan-1 states no preference
- * between the two — this is the extension's choice, recorded here and in
- * docs/handoff.md §6 rather than left implicit in an `if`.)
+ * answer only when it is the one that is there. (aboard's own port plan states no
+ * preference between the two — this is the extension's choice, recorded here and in
+ * README.md, "Starting a board when there is not one", rather than left implicit
+ * in an `if`.)
  *
  * Neither on PATH is an ERROR naming both, not a silent nothing: an empty tree
  * with no explanation is the worst version of this, and the human is one
