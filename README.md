@@ -33,14 +33,21 @@ does, something here is wrong.
 > works inside the panel and the panel follows a VS Code theme change. A high-contrast
 > LIGHT theme and `aboard.theme: board` are still unwatched.
 >
-> **Since 2026-08-27 there is a `.vsix`**, and the notify bell is a nudge button. The
-> package step is `npm run package` (see *Install, and the publishing ladder*); it builds
-> and produces `aboard-vscode-0.1.0.vsix`, ~48 KB, for installing into a real editor —
-> which is a different test from F5 and catches different things. **Packaged and verified
-> as an archive; not yet installed or run from one.** The bell became `$(zap)` /
-> `$(circle-slash)`, and the three commands became `aboard.nudge*`: a bell says
+> **Since 2026-08-27 there is a `.vsix`, and it has been installed and run.** The package
+> step is `npm run package` (see *Install, and the publishing ladder*); it builds and
+> produces `aboard-vscode-0.1.0.vsix` for installing into a real editor — which is a
+> different test from F5 and catches different things. Installing it is what found the
+> three theme and layout defects below, none of which any test had. The bell became
+> `$(zap)` / `$(circle-slash)` and the three commands became `aboard.nudge*`: a bell says
 > *notifications for you*, and this button means an agent is blocked on you and one click
 > releases it. Nothing about the mechanism changed.
+>
+> **The palette took two passes after that, and both are now confirmed in a running
+> host** (2026-08-27), high contrast included, in both variants. What the two failures had
+> in common is worth more than either fix: every colour involved was individually valid,
+> so nothing warned at either end. The board's palette is not a bag of colours — the four
+> depth tokens are an ORDER and the eleven voices are a SET that must stay mutually
+> distinguishable — and a host theme guarantees neither. See *The theme*.
 >
 > Still open, deliberately: the extension's own SSE backoff watched during a board that
 > will not come back, the old-binary warning (which now needs an `aboard` built before
@@ -529,11 +536,11 @@ has been looked at in a running host.
 - [x] Restarting the `aboard` server on the same root while the panel is open: the page reloads itself, the tree stays alive, no stale `app.css`. (2026-08-26)
 - [x] A forced `409` — a write from the browser mid-edit — warns rather than clobbers. (2026-08-26)
 - [x] The "Start the board" fallback: with nothing running the welcome view offers it, it picks the command from what is on `PATH`, and the tree fills in once the board answers. (2026-08-26)
-- [x] The board follows the VS Code theme. (2026-08-26) The board's own dark/light switch works inside the panel, and switching the VS Code theme recolours it. Still unobserved inside this row: a high-contrast LIGHT theme, and `aboard.theme: board`. Note that full fidelity is **not** the expected result — on VS Code's own Dark+ the text colours are withheld by the contrast guard, so the backgrounds should match the editor while the type stays the board's. A panel whose text went grey-on-grey would be the guard failing, not the theme arriving.
+- [x] The board follows the VS Code theme. (2026-08-26, and **high contrast both ways on 2026-08-27**) The board's own dark/light switch works inside the panel, and switching the VS Code theme recolours it. High-contrast **dark and light** were both worked through on 2026-08-27 and both came out right — which is the row that mattered most of the three, because HC light is the only place `themeKindFromBodyClass` can go wrong in a way no other theme reveals: a high-contrast light body carries `vscode-high-contrast` AND `vscode-high-contrast-light`, so testing the general class first would have rendered every one of them as a dark board inside a white editor. Machine-tested since it was written; now watched. It is also the only family that defines `contrastBorder`, so it is the only one where `--line-strong` comes from the theme at all. Still unobserved inside this row: `aboard.theme: board`. Note that full fidelity is **not** the expected result — on VS Code's own Dark+ the text colours are withheld by the contrast guard, so the backgrounds should match the editor while the type stays the board's. A panel whose text went grey-on-grey would be the guard failing, not the theme arriving.
 - [~] **The nudge button lights only when a session is genuinely parked on `aboard wait`, and pressing it releases that session.** Failed on 2026-08-26 and fixed — see *What running it found*. Proven: `test/integration.test.ts` parks a REAL `aboard wait` against a real spawned board, asserts `aboard.waiting` flips true, presses the nudge command through the controller, and asserts the CLI exits 0 and the key flips back. Not proven: that VS Code draws the lit `$(zap)` entry from that key, which only a running host can show.
 - [~] **Copy Reference copies a reference, and Copy Link copies a link.** Failed on 2026-08-26 and fixed. Both commands are pressed through their registered handlers with the tree node VS Code would hand them (`test/copy.test.ts`), and the two titles are asserted as manifest data (`test/manifest.test.ts`). Not proven: that both items appear on the right-click menu in that order, which is a `menus` contribution only a host evaluates.
 - [ ] **Installed from the `.vsix`, rather than run under F5.** `npm run package && code --install-extension aboard-vscode-0.1.0.vsix --force`, then a normal window on a project with a board. This is the first time the extension runs with no debugger attached and from the packaged file list, so it is the only check that can catch a `.vscodeignore` that excludes something load-bearing — and the only one where the F5-only defects (Node 24's inspector killing the SSE stream, `cff655a`) are guaranteed absent.
-- [ ] **The panel and a browser tab on the same board look like the same product.** The two fixes in *The theme*: the derived depth ramp (strips nearly flat, icon buttons dark rather than light grey pills) and the neutrals/voices split (the five mark swatches on a `markup` tab being five distinguishable colours, the same five a browser draws). Backgrounds should still follow the editor's ground — that difference is the feature. Asserted as a pure function over FireFly Pro's and Dark+'s real values, but "does it look right" is a human's answer.
+- [x] **The panel and a browser tab on the same board look like the same product.** (2026-08-27) Both fixes in *The theme*, confirmed on FireFly Pro: the derived depth ramp (strips nearly flat, icon buttons dark rather than light grey pills) and the neutrals/voices split (the five mark swatches on a `markup` tab being five distinguishable colours, the same five a browser draws). Backgrounds still follow the editor's ground — that difference is the feature, not a miss. **It took two passes to get here and neither was caught by a test**, because both failures were made of individually valid colours: the first mapping inverted the depth order, the second collapsed two of five mark swatches to one colour and made a third invisible. A pure function over real theme values is now asserted for both, but the thing that found them was a human looking at the screen — which is what every row on this list is for.
 - [ ] **New Tab in the sidebar opens the board's own sheet, and the panel lands on the new tab.** The message hop is covered in `test/panelhtml.test.ts` and the board's half in the aboard repo's browser suite, but the two have never been watched end to end in a host.
 - [ ] **The nudge button, in both states, on a real toolbar.** `$(zap)` with an agent parked on `aboard wait` and `$(circle-slash)` with none. Asserted as manifest data in `test/manifest.test.ts` and pressed through its handler in `test/notify.test.ts`, but which glyph VS Code actually paints for a `view/title` entry is something only a host draws.
 - [ ] The stream survives a board restart, and a board that will NOT come back stops being retried every second. Kill `aboard serve` and watch the Aboard output channel: the reconnect notices should space out, not tick once a second. The row about the page reloading covers the restart the *board* notices; this one is the extension's own backoff, which is a different mechanism and is still unwatched.
