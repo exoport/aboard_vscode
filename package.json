@@ -2,7 +2,7 @@
   "name": "aboard-vscode",
   "displayName": "Aboard Panel",
   "description": "A native sidebar tree of an aboard project's tabs, with the board itself in a webview panel.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "exoport",
   "license": "Apache-2.0",
   "repository": {
@@ -304,7 +304,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "node --test out/test/*.test.js",
-    "package": "vsce package",
+    "package": "rm -f aboard-vscode-*.vsix && vsce package",
     "vscode:prepublish": "npm run build"
   },
   "devDependencies": {

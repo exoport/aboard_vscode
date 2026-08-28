@@ -37,7 +37,7 @@ does, something here is wrong.
 >
 > **Since 2026-08-27 there is a `.vsix`, and it has been installed and run.** The package
 > step is `npm run package` (see *Install, and the publishing ladder*); it builds and
-> produces `aboard-vscode-0.1.0.vsix` for installing into a real editor — which is a
+> produces `aboard-vscode-<version>.vsix` for installing into a real editor — which is a
 > different test from F5 and catches different things. Installing it is what found the
 > three theme and layout defects below, none of which any test had. The bell became
 > `$(zap)` / `$(circle-slash)` and the three commands became `aboard.nudge*`: a bell says
@@ -597,7 +597,7 @@ then watched end to end on 2026-08-27 and is `[x]`, and the copy one is still `[
 - [x] The board follows the VS Code theme. (2026-08-26, and **high contrast both ways on 2026-08-27**) The board's own dark/light switch works inside the panel, and switching the VS Code theme recolours it. High-contrast **dark and light** were both worked through on 2026-08-27 and both came out right — which is the row that mattered most of the three, because HC light is the only place `themeKindFromBodyClass` can go wrong in a way no other theme reveals: a high-contrast light body carries `vscode-high-contrast` AND `vscode-high-contrast-light`, so testing the general class first would have rendered every one of them as a dark board inside a white editor. Machine-tested since it was written; now watched. It is also the only family that defines `contrastBorder`, so it is the only one where `--line-strong` comes from the theme at all. Still unobserved inside this row: `aboard.theme: board`. Note that full fidelity is **not** the expected result — on VS Code's own Dark+ the text colours are withheld by the contrast guard, so the backgrounds should match the editor while the type stays the board's. A panel whose text went grey-on-grey would be the guard failing, not the theme arriving.
 - [x] **The nudge button lights only when a session is genuinely parked on `aboard wait`, and pressing it releases that session.** Failed on 2026-08-26, fixed, and **watched end to end on 2026-08-27**: an agent session parked on a real `aboard wait` against the human's own board, the view-title button drew the lit `$(zap)`, the human pressed *that* button, and the session came back with `{"event":"poke","by":"human"}` and exit 0. The idle `$(circle-slash)` had been seen earlier the same day. This is the row the whole `aboard.waiting` context key exists for and the last of the two `[~]`s from the 2026-08-26 checklist. Machine half, still true: `test/integration.test.ts` parks a REAL `aboard wait` against a spawned board and asserts the key flips both ways. **One thing the evidence could not settle by itself** — `lastPoke` is `{event, at, by}` with `by` always `"human"`, so the board's own topbar button would have written an identical record; the human said which one they pressed. Recorded as a finding in the aboard repo's `development/README.md`, since a released agent can tell that it was poked and not by what.
 - [~] **Copy Reference copies a reference, and Copy Link copies a link.** Failed on 2026-08-26 and fixed. Both commands are pressed through their registered handlers with the tree node VS Code would hand them (`test/copy.test.ts`), and the two titles are asserted as manifest data (`test/manifest.test.ts`). Not proven: that both items appear on the right-click menu in that order, which is a `menus` contribution only a host evaluates.
-- [ ] **Installed from the `.vsix`, rather than run under F5.** `npm run package && code --install-extension aboard-vscode-0.1.0.vsix --force`, then a normal window on a project with a board. This is the first time the extension runs with no debugger attached and from the packaged file list, so it is the only check that can catch a `.vscodeignore` that excludes something load-bearing — and the only one where the F5-only defects (Node 24's inspector killing the SSE stream, `cff655a`) are guaranteed absent.
+- [ ] **Installed from the `.vsix`, rather than run under F5.** `npm run package && code --install-extension aboard-vscode-*.vsix --force`, then a normal window on a project with a board. This is the first time the extension runs with no debugger attached and from the packaged file list, so it is the only check that can catch a `.vscodeignore` that excludes something load-bearing — and the only one where the F5-only defects (Node 24's inspector killing the SSE stream, `cff655a`) are guaranteed absent.
 - [x] **The panel and a browser tab on the same board look like the same product.** (2026-08-27) Both fixes in *The theme*, confirmed on FireFly Pro: the derived depth ramp (strips nearly flat, icon buttons dark rather than light grey pills) and the neutrals/voices split (the five mark swatches on a `markup` tab being five distinguishable colours, the same five a browser draws). Backgrounds still follow the editor's ground — that difference is the feature, not a miss. **It took two passes to get here and neither was caught by a test**, because both failures were made of individually valid colours: the first mapping inverted the depth order, the second collapsed two of five mark swatches to one colour and made a third invisible. A pure function over real theme values is now asserted for both, but the thing that found them was a human looking at the screen — which is what every row on this list is for.
 - [x] **New Tab in the sidebar opens the board's own sheet, and the panel lands on the new tab.** (2026-08-27) The message hop is covered in `test/panelhtml.test.ts` and the board's half by `TestCreatingATabSwitchesToIt` in the aboard repo's browser suite; this row is the two of them meeting in a real host, which is the only place the `view/title` contribution, the webview `postMessage` and the board's `e.source` check are all real at once.
 - [ ] **A cropped image region reaches the clipboard through `xclip`.** Press Copy region on a `markup` tab, then Ctrl+V somewhere else. The extension host runs `xclip` (falling back to `wl-copy`) because the webview cannot — see *The clipboard* below. With neither installed the board must say so BY NAME and offer the picture, which `sudo apt remove xclip` is the way to check. Everything up to the spawn is covered by `test/clipboard.test.ts`, the message hop by `test/panelhtml.test.ts` and the aboard repo's browser suite; what needs a human is an X session and a paste.
@@ -734,8 +734,10 @@ work.
 `@vscode/vsce` is a dev dependency and `npm run package` is the whole step:
 
 ```sh
-npm run package                                      # → aboard-vscode-0.1.0.vsix
-code --install-extension aboard-vscode-0.1.0.vsix --force
+npm run package                                      # → aboard-vscode-<version>.vsix
+                                                     #   (removes the previous build first, so the
+                                                     #    glob below always matches exactly one file)
+code --install-extension aboard-vscode-*.vsix --force
 ```
 
 `package` runs `vsce package`, which runs `vscode:prepublish` → `npm run build` first, so
@@ -762,7 +764,7 @@ Foundation account with the Publisher Agreement signed, a namespace, and a token
 
 ```sh
 npx ovsx create-namespace <publisher> -p "$OVSX_TOKEN"
-npx ovsx publish aboard-vscode-0.1.0.vsix -p "$OVSX_TOKEN"
+npx ovsx publish aboard-vscode-*.vsix -p "$OVSX_TOKEN"   # one file: package removes the last one
 ```
 
 **Not the VS Code Marketplace — deliberate, not an omission.** This extension is coupled

@@ -88,6 +88,15 @@ class Controller implements vscode.Disposable {
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.output = vscode.window.createOutputChannel('Aboard');
+    // Which build of this extension is actually running.
+    //
+    // Every dev .vsix so far has carried the same version, so "I reinstalled it"
+    // and "the old one is still loaded" produced identical evidence — which is
+    // half of why one clipboard failure survived three rounds of reinstalling
+    // (2026-08-28). The version is bumped per dev build now, and this line is
+    // where the human can read the one that answered.
+    const version: unknown = (context.extension?.packageJSON as { version?: unknown } | undefined)?.version;
+    this.output.appendLine(`aboard-vscode ${typeof version === 'string' ? version : 'unknown'} activated`);
     this.provider = new BoardTreeProvider(context.extensionUri);
     this.view = vscode.window.createTreeView<Node>(VIEW_ID, {
       treeDataProvider: this.provider,
