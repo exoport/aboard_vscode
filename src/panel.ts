@@ -60,6 +60,7 @@ export class BoardPanel {
     private themeMode: ThemeMode,
     private readonly onActive: (tab: string) => void,
     private readonly onDispose: () => void,
+    private readonly log: (line: string) => void,
   ) {
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage(
@@ -91,7 +92,17 @@ export class BoardPanel {
         if (message.type === 'clipboard-image') {
           // The one thing the board genuinely cannot do for itself in here. It
           // has already drawn the picture; this is the last hop.
+          //
+          // Logged at both ends, because this hop crosses three processes — page,
+          // extension host, and a program — and when it fails the human sees one
+          // dialog that cannot say which of the three did not answer. The output
+          // channel is where that question gets settled without a debugger.
+          const started = Date.now();
+          this.log(`clipboard: request ${message.id} (${message.dataUrl.length} chars)`);
           void copyImageToClipboard(message.dataUrl).then((outcome) => {
+            this.log(outcome.ok
+              ? `clipboard: request ${message.id} copied with ${outcome.tool} in ${Date.now() - started}ms`
+              : `clipboard: request ${message.id} failed after ${Date.now() - started}ms — ${outcome.error}`);
             void this.panel.webview.postMessage({
               type: 'clipboard-result',
               id: message.id,
@@ -115,7 +126,12 @@ export class BoardPanel {
   static async create(
     board: Board,
     extensionUri: vscode.Uri,
-    handlers: { onActive: (tab: string) => void; onDispose: () => void; themeMode: ThemeMode },
+    handlers: {
+      onActive: (tab: string) => void;
+      onDispose: () => void;
+      themeMode: ThemeMode;
+      log: (line: string) => void;
+    },
     column: vscode.ViewColumn = vscode.ViewColumn.Active,
   ): Promise<BoardPanel> {
     const panel = vscode.window.createWebviewPanel(BoardPanel.viewType, `Aboard · ${board.title}`, column, {
@@ -133,7 +149,9 @@ export class BoardPanel {
     const external = await vscode.env.asExternalUri(vscode.Uri.parse(board.boardUrl));
     const boardUrl = external.toString();
     panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'activity.svg');
-    const created = new BoardPanel(panel, board, boardUrl, handlers.themeMode, handlers.onActive, handlers.onDispose);
+    const created = new BoardPanel(
+      panel, board, boardUrl, handlers.themeMode, handlers.onActive, handlers.onDispose, handlers.log,
+    );
     created.render(extensionUri);
     return created;
   }

@@ -336,7 +336,23 @@ after ten minutes. In a real extension host that is a leaked descriptor per copy
 of the pipe is destroyed on exit now, and the timeout no longer kills the child, because
 on these tools the process that matters is the one that already forked.
 
-`wl-copy` behaves identically, and is tried **first** on a Wayland session. macOS and
+`wl-copy` behaves identically, and is tried **first** on a Wayland session.
+
+**The tests never touch the real clipboard**, and that rule was bought the hard way. The
+first version called the real `xclip`, so running `npm test` replaced whatever the
+developer had copied with this file's fake PNG — eight bytes of signature and sixty-four
+of `0x07`. On 2026-08-28 the human pasted it into their board and reported an image that
+would not load; it was mine. `copyImageToClipboard` takes an injectable tool table, and the
+tests drive stand-ins built from `node` itself: one that **forks and exits** exactly as
+xclip does (which is what proves the `exit`-not-`close` fix, with no X server needed), one
+that exits non-zero, one that wedges, and one that does not exist. A unit test has no
+business changing the machine it runs on.
+
+**When it does not work, the Output channel says where it stopped.** This hop crosses three
+processes — the page, the extension host, and a program — and when it fails the human sees
+one dialog that cannot say which of the three went quiet. `Aboard` in the Output panel logs
+the request with its size and the outcome with its timing, so "the request never arrived"
+and "the tool refused" stop looking the same. macOS and
 Windows are refused by name rather than guessed at; a missing tool is reported with the
 command to install it, and the board still offers the picture and **Add this picture to
 the tab**, which needs no permission at all.

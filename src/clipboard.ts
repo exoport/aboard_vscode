@@ -185,11 +185,29 @@ function runTool(
  * — so deleting the file underneath it is safe and leaving it would be litter
  * that accumulates once per copy.
  */
+export interface CopyOptions {
+  platform?: string;
+  session?: string;
+  /**
+   * The programs to try. Injectable ONLY so tests can drive the process
+   * lifecycle without writing to the developer's real clipboard.
+   *
+   * That is not a hypothetical tidiness: the first version of these tests called
+   * the real xclip, so running `npm test` replaced whatever the developer had
+   * copied with an 8-byte header and 64 bytes of 0x07 — and on 2026-08-28 the
+   * human pasted that into their board and reported an image that would not
+   * load. A unit test has no business touching the machine it runs on.
+   */
+  tools?: typeof CLIPBOARD_TOOLS;
+}
+
 export async function copyImageToClipboard(
   dataUrl: unknown,
-  platform: string = process.platform,
-  session: string = process.env.XDG_SESSION_TYPE ?? '',
+  opts: CopyOptions = {},
 ): Promise<ClipboardOutcome> {
+  const platform = opts.platform ?? process.platform;
+  const session = opts.session ?? process.env.XDG_SESSION_TYPE ?? '';
+  const table = opts.tools ?? CLIPBOARD_TOOLS;
   const png = decodePng(dataUrl);
   if (!png) {
     return { ok: false, error: 'that was not a PNG this extension is willing to write' };
@@ -212,8 +230,8 @@ export async function copyImageToClipboard(
     // "usually" is not a reason to ask the compatibility layer first when the
     // real one may be installed.
     const tools = session === 'wayland'
-      ? [...CLIPBOARD_TOOLS].sort((a, b) => Number(b.cmd === 'wl-copy') - Number(a.cmd === 'wl-copy'))
-      : CLIPBOARD_TOOLS;
+      ? [...table].sort((a, b) => Number(b.cmd === 'wl-copy') - Number(a.cmd === 'wl-copy'))
+      : table;
     for (const tool of tools) {
       const outcome = await runTool(tool, file, png);
       if (outcome.ok) {

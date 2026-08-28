@@ -473,6 +473,7 @@ class Controller implements vscode.Disposable {
       themeMode: themeMode(),
       onActive: (tab) => this.revealTab(target, tab),
       onDispose: () => this.panels.delete(target.instanceFile),
+      log: (line) => this.log(line),
     });
     this.panels.set(target.instanceFile, panel);
     return panel;

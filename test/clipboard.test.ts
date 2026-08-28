@@ -23,6 +23,39 @@ const PNG = Buffer.concat([
 ]);
 const DATA_URL = 'data:image/png;base64,' + PNG.toString('base64');
 
+/**
+ * Stand-ins for xclip, so a unit test never writes to the machine's clipboard.
+ *
+ * `node` is used as the program because it is certainly present, and the
+ * successful one DAEMONISES exactly as xclip does: it spawns a child that
+ * inherits stderr and outlives it, then exits 0 immediately. That is the whole
+ * hazard, reproduced without an X server — a `close`-based implementation waits
+ * for the inherited pipe and never finishes.
+ *
+ * The first version of these tests called the real xclip. Running `npm test`
+ * therefore replaced whatever the developer had on their clipboard with this
+ * file's fake PNG, and on 2026-08-28 the human pasted it into their board and
+ * reported an image that would not load. It was mine.
+ */
+// `detached` + `unref` + an explicit exit, because without all three the
+// stand-in does not reproduce xclip: Node keeps its event loop alive for a
+// running child, so the PARENT would wait for it and the copy would look slow
+// for the ordinary reason instead of the interesting one. Measured while writing
+// this — the first version took 3123ms and the assertion caught it, which is the
+// test proving it can tell the two apart.
+//
+// fd 2 is passed to the grandchild deliberately: that is the inherited stderr
+// pipe whose staying open is the entire hazard.
+const FORKS = 'const {spawn}=require("child_process");'
+  + 'const c=spawn(process.execPath,["-e","setTimeout(()=>{},3000)"],{stdio:["ignore","ignore",2],detached:true});'
+  + 'c.unref();process.exit(0);';
+const STANDIN: typeof CLIPBOARD_TOOLS = [
+  { cmd: process.execPath, stdin: false, args: () => ['-e', FORKS] },
+];
+const MISSING: typeof CLIPBOARD_TOOLS = [
+  { cmd: 'aboard-no-such-clipboard-tool', stdin: false, args: () => [] },
+];
+
 describe('decodePng', () => {
   it('reads the data URL the board sends', () => {
     const out = decodePng(DATA_URL);
@@ -56,20 +89,29 @@ describe('decodePng', () => {
 });
 
 describe('copyImageToClipboard', () => {
-  it('says what to install, on the platform it can help with', async () => {
-    const out = await copyImageToClipboard(DATA_URL, 'linux');
-    // Either a tool was there and it worked, or it was not and the message names
-    // it. Both are correct; what must never happen is a bare failure.
-    if (!out.ok) {
-      assert.match(out.error ?? '', /xclip/, 'a Linux failure has to name the program to install');
-    } else {
-      assert.ok(CLIPBOARD_TOOLS.some((t) => t.cmd === out.tool), `copied with an unknown tool ${out.tool}`);
-    }
+  it('says what to install when no tool is there', async () => {
+    const out = await copyImageToClipboard(DATA_URL, { platform: 'linux', tools: MISSING });
+    assert.equal(out.ok, false);
+    assert.match(out.error ?? '', /xclip/, 'a Linux failure has to name the program to install');
+    assert.match(out.error ?? '', /install/i);
+  });
+
+  it('reports a tool that is present and refuses, as itself', async () => {
+    // Distinguished from "not installed" on purpose: one is something the human
+    // fixes with apt and the other is something they cannot, and a single
+    // "clipboard failed" would send them to the wrong one.
+    const failing: typeof CLIPBOARD_TOOLS = [
+      { cmd: process.execPath, stdin: false, args: () => ['-e', 'process.exit(3)'] },
+    ];
+    const out = await copyImageToClipboard(DATA_URL, { platform: 'linux', tools: failing });
+    assert.equal(out.ok, false);
+    assert.match(out.error ?? '', /exited 3/);
+    assert.doesNotMatch(out.error ?? '', /not installed/);
   });
 
   it('does not pretend to work on a platform it has no tool for', async () => {
     for (const platform of ['darwin', 'win32']) {
-      const out = await copyImageToClipboard(DATA_URL, platform);
+      const out = await copyImageToClipboard(DATA_URL, { platform, tools: STANDIN });
       assert.equal(out.ok, false);
       assert.match(out.error ?? '', new RegExp(platform), 'the refusal names the platform it is about');
     }
@@ -77,7 +119,7 @@ describe('copyImageToClipboard', () => {
 
   it('refuses a payload that is not a PNG without touching the disk', async () => {
     const before = await tmpClipFiles();
-    const out = await copyImageToClipboard('data:text/html;base64,PGI+', 'linux');
+    const out = await copyImageToClipboard('data:text/html;base64,PGI+', { platform: 'linux', tools: STANDIN });
     assert.equal(out.ok, false);
     assert.deepEqual(await tmpClipFiles(), before, 'a refused payload still created a temp file');
   });
@@ -87,7 +129,7 @@ describe('copyImageToClipboard', () => {
     // than re-reading it — so it is removed in a finally. One per copy, kept,
     // would be litter that accumulates for as long as the editor is open.
     const before = await tmpClipFiles();
-    await copyImageToClipboard(DATA_URL, 'linux');
+    await copyImageToClipboard(DATA_URL, { platform: 'linux', tools: STANDIN });
     assert.deepEqual(await tmpClipFiles(), before);
   });
 });
@@ -117,44 +159,42 @@ async function tmpClipFiles(): Promise<string[]> {
   return names.filter((n) => n.startsWith('aboard-clip-')).sort();
 }
 
-describe('the real clipboard tool', () => {
-  // The one case that needs an actual binary, and the one that shipped broken.
+describe('a tool that daemonises', () => {
+  // The bug that shipped, reproduced without an X server and without touching
+  // the machine's clipboard.
   //
-  // xclip takes the X selection by FORKING: the foreground process exits 0 in
-  // about a millisecond and a background process stays alive to serve it, holding
-  // the stderr pipe it inherited. Listening for Node's `close` — exit AND stdio
-  // EOF — therefore never fired, the five-second timeout reported a failure, and
-  // the human saw the fallback dialog with the image correctly on their clipboard
-  // behind it. Reported 2026-08-28 as "I installed xclip and it still shows the
-  // modal". wl-copy behaves the same way.
+  // xclip takes ownership of the X selection by FORKING: the foreground process
+  // reads the image and exits 0 in about a millisecond, and a background process
+  // stays alive to serve the selection — holding the stderr pipe it inherited.
+  // Node's `close` fires on exit AND stdio EOF, so it never fired: the five-second
+  // timeout reported a failure on a copy that had already succeeded, and the human
+  // saw the fallback dialog with the image correctly on their clipboard behind it.
+  // Reported 2026-08-28 as "I installed xclip and it still shows the modal".
   //
-  // So the TIME is the assertion. A `close`-based implementation takes the whole
-  // timeout and fails; this one answers in milliseconds.
-  it('answers in milliseconds, not when a forked daemon closes its pipes', async () => {
-    if (process.platform !== 'linux') {
-      console.log(`[clipboard] SKIPPED: ${process.platform} has no tool this extension knows`);
-      return;
-    }
+  // The stand-in does exactly that, so the TIME is the assertion: a `close`-based
+  // implementation burns the whole budget and fails; this one answers at once.
+  // wl-copy behaves the same way.
+  it('is done when it EXITS, not when its child closes the pipes it inherited', async () => {
     const started = Date.now();
-    const out = await copyImageToClipboard(DATA_URL, 'linux');
+    const out = await copyImageToClipboard(DATA_URL, { platform: 'linux', tools: STANDIN });
     const took = Date.now() - started;
 
-    // Loud, never silent — the same posture as the integration test. A machine
-    // with no tool or no display cannot answer this, and must say which.
-    if (!out.ok && /is not installed/.test(out.error ?? '')) {
-      console.log('[clipboard] SKIPPED: no xclip or wl-copy here — install one and this case runs');
-      return;
-    }
-    if (!out.ok && /display|DISPLAY/i.test(out.error ?? '')) {
-      console.log(`[clipboard] SKIPPED: a tool is installed but there is no display (${out.error})`);
-      return;
-    }
-
-    assert.equal(out.ok, true, `a clipboard tool is present and the copy failed: ${out.error}`);
-    assert.ok(CLIPBOARD_TOOLS.some((t) => t.cmd === out.tool), `copied with an unknown tool ${out.tool}`);
+    assert.equal(out.ok, true, `the daemonising stand-in was not reported as done: ${out.error}`);
     assert.ok(
       took < TOOL_TIMEOUT_MS / 2,
-      `the copy took ${took}ms of a ${TOOL_TIMEOUT_MS}ms budget — it is waiting for the daemon's pipes again`,
+      `it took ${took}ms of a ${TOOL_TIMEOUT_MS}ms budget — it is waiting for the daemon's pipes again`,
     );
+  });
+
+  it('still times out on a tool that genuinely wedges before exiting', async () => {
+    // The timeout has to survive the fix. A tool that never exits at all is a
+    // different thing from one that exits and leaves a child behind, and only
+    // the first should hit the clock.
+    const wedged: typeof CLIPBOARD_TOOLS = [
+      { cmd: process.execPath, stdin: false, args: () => ['-e', `setTimeout(()=>{}, ${TOOL_TIMEOUT_MS * 3})`] },
+    ];
+    const out = await copyImageToClipboard(DATA_URL, { platform: 'linux', tools: wedged });
+    assert.equal(out.ok, false);
+    assert.match(out.error ?? '', /did not finish within/);
   });
 });
