@@ -1,0 +1,55 @@
+# Every push and pull request: the unit suite, and nothing else.
+#
+# There is no browser here and no editor: everything with a rule worth arguing
+# about lives on the non-`vscode` side of the code so it can be reached without
+# one. What this cannot catch is what the extension's failure mode actually is —
+# silence in a real editor — which is why README.md keeps a hand-verification
+# checklist and why a human installs the .vsix before anything is tagged.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # The integration suite drives the real `aboard` binary, and skips loudly
+      # without one — so CI installs it rather than reading a skip as a pass.
+      # It doubles as a check that the published module is installable at all.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27'
+
+      - name: Install aboard
+        run: go install github.com/exoport/aboard/cmd/aboard@latest
+
+      - name: The integration suite can see it
+        run: aboard version
+
+      # Type-checks first: `npm test` compiles the test tree, so a type error in
+      # src/ would otherwise surface as a test failure with a confusing message.
+      - run: npm run typecheck
+
+      - run: npm test
+
+      # The .vsix has to build, on every push rather than only at a tag. A
+      # .vscodeignore that excludes something load-bearing, or a packaging rule
+      # that starts refusing, is exactly the class of defect that would otherwise
+      # be found while cutting a release.
+      - run: npm run package

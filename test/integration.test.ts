@@ -55,26 +55,48 @@ import type { RenderedRow } from './vscode-stub';
 /* ------------------------------------------------------------ the binary */
 
 /**
- * Where the `aboard` binary is.
+ * Where the `aboard` binary is, in the order worth trying.
  *
  * A judgement call worth stating: when it is missing, this file SKIPS rather than
- * fails. The binary lives in a sibling repository that a clone of this one does
+ * fails. The binary lives in a different repository that a clone of this one does
  * not carry, and a suite that cannot pass without a second checkout is a suite
- * people stop running. The skip is loud — it prints the path it looked at and how
- * to build it — because a silent skip is worse than a failure.
+ * people stop running. The skip is loud — it prints what it looked for and how to
+ * get it — because a silent skip is worse than a failure.
+ *
+ * The default used to be one absolute path under one person's home directory,
+ * which worked on exactly one machine and told every other reader that this suite
+ * was not for them. Now: an explicit ABOARD_BIN, then whatever `aboard` is on
+ * PATH (a `go install`, which is what CI does), then a sibling checkout, which is
+ * the layout a contributor working on both repositories already has.
  */
-const ABOARD_BIN = process.env.ABOARD_BIN ?? '/home/diegos/_dev/exoport/aboard/aboard';
-const haveBinary = (() => {
+const executable = (candidate: string): boolean => {
   try {
-    fs.accessSync(ABOARD_BIN, fs.constants.X_OK);
-    return true;
+    fs.accessSync(candidate, fs.constants.X_OK);
+    return fs.statSync(candidate).isFile();
   } catch {
     return false;
   }
-})();
+};
+
+// An explicit ABOARD_BIN is used ALONE. Falling back from a path somebody set on
+// purpose would test a different binary than the one they named and say nothing
+// about it — the same silent-substitution problem that makes a skipped gate read
+// as a pass.
+const CANDIDATES = process.env.ABOARD_BIN
+  ? [process.env.ABOARD_BIN]
+  : [
+      ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean).map((d) => path.join(d, 'aboard')),
+      path.resolve(__dirname, '..', '..', '..', 'aboard', 'aboard'),
+    ];
+
+const found = CANDIDATES.find(executable);
+const ABOARD_BIN = found ?? CANDIDATES[0] ?? 'aboard';
+const haveBinary = found !== undefined;
+
 const skip = haveBinary
   ? false
-  : `no aboard binary at ${ABOARD_BIN} — build it with \`make build\` in the aboard repo, or set ABOARD_BIN`;
+  : 'no `aboard` binary found — put one on PATH (`go install github.com/exoport/aboard/cmd/aboard@latest`), '
+    + 'point ABOARD_BIN at one, or check out the aboard repo beside this one and `make build` there';
 
 if (!haveBinary) {
   console.warn(`[integration] SKIPPED: ${skip}`);

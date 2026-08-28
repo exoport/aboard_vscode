@@ -1,0 +1,80 @@
+# A tag publishes the extension: build it, test it, package it, and attach the
+# .vsix to a GitHub Release.
+#
+# It does NOT publish to a marketplace. Not publishing is a recorded decision
+# (see the aboard repo's docs/how-to/use-the-vscode-extension.md), and reversing
+# it needs an Open VSX namespace and a token that would have to live here as a
+# secret — so the download is the release, and installing is
+# `code --install-extension aboard-vscode-<version>.vsix`.
+#
+# `gh` is preinstalled on GitHub-hosted runners and authenticates with the
+# workflow's own token, so this needs no third-party action to create the
+# release and no credential of its own.
+name: Release
+
+on:
+  push:
+    tags:
+      # Final versions only. The glob is not end-anchored, so the job-level
+      # guard below is what actually keeps a `-rc` tag out.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: "!contains(github.ref_name, '-')"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # The integration suite drives the real `aboard` binary, and skips loudly
+      # without one — so CI installs it rather than reading a skip as a pass.
+      # It doubles as a check that the published module is installable at all.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27'
+
+      - name: Install aboard
+        run: go install github.com/exoport/aboard/cmd/aboard@latest
+
+      - name: The integration suite can see it
+        run: aboard version
+
+      # The tag and package.json must agree, or the .vsix on the Releases page
+      # carries a version nobody can match to the tag they downloaded it from.
+      # This is the same ambiguity that cost a day on 2026-08-28, when every dev
+      # build called itself 0.1.0 and "did the reinstall land" was unanswerable.
+      - name: The tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag ${GITHUB_REF_NAME} says $tag, package.json says $pkg" >&2
+            exit 1
+          fi
+          echo "version $pkg"
+
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          vsix="$(ls aboard-vscode-*.vsix)"
+          gh release create "$GITHUB_REF_NAME" "$vsix" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Install: \`code --install-extension $vsix --force\`, then reload the window.
+
+          See CHANGELOG.md for what is in this release. The extension is a viewer for a running [aboard](https://github.com/exoport/aboard) board; it is not published to a marketplace."

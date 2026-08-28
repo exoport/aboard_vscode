@@ -10,51 +10,34 @@ none should ever be added; everything it shows comes from the running `aboard` (
 `aboard` grows a sixteenth renderer this extension needs zero changes — if it ever
 does, something here is wrong.
 
-> **Status: verified in a real VS Code on 2026-08-26 (M6 step 1); a dev `.vsix` packages
-> as of 2026-08-27, and has not been installed from yet.** The human worked the hand-verification checklist (*What has been observed
-> in a real VS Code*, below) through in an Extension Development Host against
-> `/home/diegos/_dev/ai/borrar` on
-> `aboard 93ba033`, and **everything on it passed but two**: the notify bell never lit,
-> and "Copy Reference" copied a link. Both are fixed here — see *What running it found*
-> below — and both fixes are covered by tests, including one that parks a real
-> `aboard wait` against a real spawned board. **Neither fix has been looked at in a
-> running host**, which is why those two rows were `[~]` rather than `[x]`. **The nudge
-> one closed on 2026-08-27** — a real parked session, released by that button, watched.
-> The copy one is still open.
+> **Status: released as v0.1.1 on 2026-08-28. Installed from the `.vsix` and in daily
+> use.** It is not published to any marketplace — download the `.vsix` from the GitHub
+> Release and `code --install-extension aboard-vscode-<version>.vsix --force`, then reload
+> the window. `npm run install:dev` does the same from a clone and prints the version that
+> landed, which is the line to read when a reinstall appears to change nothing.
 >
-> **Four defects have been found by running it, across two passes, and all four are
-> fixed.** Every one of them was invisible to the suite at the time, and every one had
-> the same shape: the mechanism worked and the thing on screen said nothing. That is the
-> measure of how far `node --test` can stand in for a real host, and the reason the two
-> rows above stay honest.
+> **What running it has been worth, and it is the argument for this whole section.**
+> Fourteen defects have been found by a human looking at the screen across four rounds,
+> and *not one* was visible to `node --test`. Every one had the same shape: the mechanism
+> worked and the thing on screen said nothing.
 >
-> **Since that pass, one feature: the board follows your VS Code theme** (see *The theme*
-> below). Machine-verified — the mapping, the contrast guard, the page's bridge script run
-> in `node:vm`, the setting as manifest data, and the token names checked against the real
-> binary — and it has **since been looked at in a running host**: the board's own switch
-> works inside the panel and the panel follows a VS Code theme change. A high-contrast
-> LIGHT theme and `aboard.theme: board` are still unwatched.
+> - Two `F5` passes (2026-08-26) found six, including one in the *aboard* repo: the board called `window.confirm`, which a webview swallows, so **Remove tab** did nothing at all.
+> - Installing the `.vsix` (2026-08-27) found four more that F5 had not — the purpose strip reading as a notification, the `+` costing a row of a small panel, and the VS Code palette mapping wrong TWICE. Both palette failures were built from individually valid colours, which is why nothing warned at either end: the four depth tokens are an ORDER and the eleven voices are a SET that must stay mutually distinguishable, and a host theme guarantees neither. See *The theme*.
+> - The clipboard round trip (2026-08-28) found the rest, one of which the board could not even describe — it was discovering its host's abilities by timing out, and a timeout cannot tell "nothing framed me" from "an old host" from "a host that broke". Hosts announce themselves now.
 >
-> **Since 2026-08-27 there is a `.vsix`, and it has been installed and run.** The package
-> step is `npm run package` (see *Install, and the publishing ladder*); it builds and
-> produces `aboard-vscode-<version>.vsix` for installing into a real editor — which is a
-> different test from F5 and catches different things. Installing it is what found the
-> three theme and layout defects below, none of which any test had. The bell became
-> `$(zap)` / `$(circle-slash)` and the three commands became `aboard.nudge*`: a bell says
-> *notifications for you*, and this button means an agent is blocked on you and one click
-> releases it. Nothing about the mechanism changed.
+> **Watched working in a real editor**: activation and discovery (including a board
+> started after the window was open), the tree, the panel without the board's own tab
+> strip, tab switching with no reload, a drag to another editor group, `html` tabs with a
+> clean console, live dots, removal answers, rename and set-note, `]` moving the sidebar
+> highlight, two viewers disagreeing about chrome, a server restart, a forced `409`, the
+> Start-the-board fallback, the theme in both variants including high contrast, the New
+> Tab button, the nudge releasing a parked session, and a cropped image reaching the
+> system clipboard through `xclip`.
 >
-> **The palette took two passes after that, and both are now confirmed in a running
-> host** (2026-08-27), high contrast included, in both variants. What the two failures had
-> in common is worth more than either fix: every colour involved was individually valid,
-> so nothing warned at either end. The board's palette is not a bag of colours — the four
-> depth tokens are an ORDER and the eleven voices are a SET that must stay mutually
-> distinguishable — and a host theme guarantees neither. See *The theme*.
->
-> Still open, deliberately: the extension's own SSE backoff watched during a board that
-> will not come back, the old-binary warning (which now needs an `aboard` built before
-> 2026-08-26 03:34 to provoke), and Remote SSH / Codespaces. Publishing anywhere is still
-> gated on the human.
+> **Still unwatched, deliberately**: the extension's own SSE backoff against a board that
+> will not come back, `aboard.theme: board`, the old-binary `?chrome=` warning (which now
+> needs an `aboard` built before 2026-08-26 03:34 to provoke), Remote SSH / Codespaces,
+> and the Copy Reference / Copy Link menu order.
 >
 > The rest is covered by `npm test` (`node --test`, no framework — the count is in the
 > run, not written down here, because a hand-maintained one lies eventually), which
@@ -77,11 +60,13 @@ No runtime dependencies. Dev only: `typescript`, `esbuild`, `@types/vscode`,
 
 `test/integration.test.ts` spawns a real `aboard` binary on a throwaway project
 (`mkdtemp`, so its derived port cannot collide with a board anybody is using, and it
-is killed by pid afterwards). It looks for `$ABOARD_BIN`, defaulting to
-`/home/diegos/_dev/exoport/aboard/aboard`, and **skips loudly** when the binary is not
-there — a clone of this repository does not carry the sibling one, and a suite that
-cannot pass without a second checkout is a suite people stop running. Build it with
-`make build` in the `aboard` repo to have it run.
+is killed by pid afterwards). It looks for `$ABOARD_BIN` if you set one — alone, because
+falling back from a path somebody named on purpose would test a different binary and say
+nothing about it — and otherwise for `aboard` on `PATH`, then for a sibling checkout. It
+**skips loudly** when it finds none: a clone of this repository does not carry the other
+one, and a suite that cannot pass without a second checkout is a suite people stop
+running. `go install github.com/exoport/aboard/cmd/aboard@latest` is enough to have it
+run, and is what CI does.
 
 ## The contract it consumes
 
@@ -582,7 +567,7 @@ a real board is proven and the part that needs a human looking at VS Code is not
 tick there would claim more than anybody has seen; **`[ ]`** is still open.
 
 The list was worked through twice on **2026-08-26**, both times in an Extension
-Development Host against `/home/diegos/_dev/ai/borrar`. The first pass reached the top
+Development Host against a scratch project with a board running. The first pass reached the top
 four rows and stopped on two defects; the second went through everything left and passed
 all of it but two, which became the two `[~]` rows. Both were fixed; the nudge one was
 then watched end to end on 2026-08-27 and is `[x]`, and the copy one is still `[~]`.
