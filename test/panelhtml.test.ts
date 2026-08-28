@@ -339,6 +339,36 @@ describe('the panel page', () => {
     assert.deepEqual(plain(themed(page)[0]!.data['tokens']), { '--bg': '#101010' });
   });
 
+  it('carries a clipboard request out to the host and the answer back in', () => {
+    // The hop that exists because a webview cannot write an image to the
+    // clipboard and the extension host can. This page learns nothing about
+    // images on the way through — it forwards a shape and forwards a shape back.
+    const page = runPage({});
+    page.load();
+    const before = page.toHost.length;
+
+    page.fromBoard({ __aboard: 'clipboard-image', id: 7, dataUrl: 'data:image/png;base64,AAAA' });
+    const sent = page.toHost.slice(before).filter((m) => m['type'] === 'clipboard-image');
+    assert.equal(sent.length, 1, 'the board’s clipboard request did not reach the host');
+    assert.equal(sent[0]!['id'], 7);
+    assert.equal(sent[0]!['dataUrl'], 'data:image/png;base64,AAAA');
+
+    const framed = page.toFrame.length;
+    page.fromHost({ type: 'clipboard-result', id: 7, ok: true, tool: 'xclip' });
+    const back = page.toFrame.slice(framed);
+    assert.equal(back.length, 1, 'the host’s answer did not reach the board');
+    assert.equal(back[0]!.data['__aboard'], 'clipboard-result');
+    assert.equal(back[0]!.data['id'], 7);
+    assert.equal(back[0]!.data['ok'], true);
+
+    // Guarded like every other host branch: an html tab inside the board reaches
+    // window.top, and must not be able to tell the board that a copy it never
+    // made succeeded.
+    const after = page.toFrame.length;
+    page.fromNested({ type: 'clipboard-result', id: 7, ok: true });
+    assert.equal(page.toFrame.length, after, 'a nested frame forged a clipboard result');
+  });
+
   it('delegates clipboard-write to the board frame', () => {
     // The board's markup renderer copies a cropped image region to the
     // clipboard. In here the board is a cross-origin frame, so the permission

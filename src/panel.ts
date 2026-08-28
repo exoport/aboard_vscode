@@ -8,6 +8,7 @@ import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 
 import type { Board } from './board';
+import { copyImageToClipboard } from './clipboard';
 import { frameSrc } from './model';
 import { parseWebviewMessage } from './messages';
 import { mapVscodeTheme, themeKindFromBodyClass, VSCODE_VARS } from './theme';
@@ -85,6 +86,20 @@ export class BoardPanel {
           }
           const theme = mapVscodeTheme(message.vars, themeKindFromBodyClass(message.bodyClass));
           void this.panel.webview.postMessage({ type: 'theme', kind: theme.kind, tokens: theme.tokens });
+          return;
+        }
+        if (message.type === 'clipboard-image') {
+          // The one thing the board genuinely cannot do for itself in here. It
+          // has already drawn the picture; this is the last hop.
+          void copyImageToClipboard(message.dataUrl).then((outcome) => {
+            void this.panel.webview.postMessage({
+              type: 'clipboard-result',
+              id: message.id,
+              ok: outcome.ok,
+              error: outcome.error,
+              tool: outcome.tool,
+            });
+          });
           return;
         }
         // The board switched tabs on its own. Remember it so a reveal in the

@@ -20,13 +20,29 @@ export type ToWebview =
    * themes differ in their VALUES and not in that class, and nothing inside a
    * webview is notified about that. The host is.
    */
-  | { type: 'theme-probe' };
+  | { type: 'theme-probe' }
+  /**
+   * The answer to a `clipboard-image` request, forwarded into the frame.
+   *
+   * `id` is the board's own, echoed back: the board may have more than one copy
+   * in flight and a reply that cannot be matched to its request is a reply that
+   * has to be guessed at.
+   */
+  | { type: 'clipboard-result'; id: number; ok: boolean; error?: string; tool?: string };
 
 /** Webview → extension. */
 export type FromWebview =
   | { type: 'active'; tab: string }
   | { type: 'ready' }
-  | { type: 'theme'; vars: Record<string, string>; bodyClass: string };
+  | { type: 'theme'; vars: Record<string, string>; bodyClass: string }
+  /**
+   * The board asking the HOST to put a PNG on the system clipboard.
+   *
+   * It asks because it cannot: a webview holds a permissions policy that blocks
+   * the Clipboard API, and VS Code offers no way to lift it. The extension host
+   * is Node and can run xclip. See `src/clipboard.ts`.
+   */
+  | { type: 'clipboard-image'; id: number; dataUrl: string };
 
 /**
  * The board announces its own tab switches ([ ], 1–9, and its choice on load) as
@@ -69,6 +85,15 @@ export function parseWebviewMessage(raw: unknown): FromWebview | undefined {
       }
     }
     return { type: 'theme', vars, bodyClass: msg.bodyClass };
+  }
+  if (msg.type === 'clipboard-image') {
+    // The size is bounded in clipboard.ts, where the decode happens; what is
+    // checked here is only that this is the shape it claims to be. A data URL
+    // arriving as a number would otherwise reach `startsWith`.
+    if (typeof msg.id !== 'number' || !Number.isFinite(msg.id) || typeof msg.dataUrl !== 'string') {
+      return undefined;
+    }
+    return { type: 'clipboard-image', id: msg.id, dataUrl: msg.dataUrl };
   }
   if (msg.type !== 'active') {
     return undefined;

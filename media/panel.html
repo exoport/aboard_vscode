@@ -119,6 +119,15 @@
           // is __aboard — the bridge was renamed outright, with no alias.
           if (e.data && e.data.__aboard === 'active' && typeof e.data.tab === 'string') {
             vscode.postMessage({ type: 'active', tab: e.data.tab });
+            return;
+          }
+          // The board asking the host to put a PNG on the system clipboard,
+          // which it cannot do itself in here. Passed straight through: this
+          // page still knows nothing about images, and the shape is validated in
+          // src/messages.ts where it can be tested.
+          if (e.data && e.data.__aboard === 'clipboard-image'
+              && typeof e.data.id === 'number' && typeof e.data.dataUrl === 'string') {
+            vscode.postMessage({ type: 'clipboard-image', id: e.data.id, dataUrl: e.data.dataUrl });
           }
           return;
         }
@@ -171,6 +180,19 @@
         }
         if (fromHost && e.data && e.data.type === 'theme-probe') {
           report();
+          return;
+        }
+        // ...and the answer on its way back. Guarded like the theme branches: a
+        // sandboxed html tab reaching window.top must not be able to tell the
+        // board that a copy it never made succeeded.
+        if (fromHost && e.data && e.data.type === 'clipboard-result' && frame.contentWindow) {
+          frame.contentWindow.postMessage({
+            __aboard: 'clipboard-result',
+            id: e.data.id,
+            ok: !!e.data.ok,
+            error: e.data.error,
+            tool: e.data.tool,
+          }, '*');
         }
       });
 

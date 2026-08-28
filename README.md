@@ -102,6 +102,7 @@ a viewer uses.
 | `#tab=<id>` on the board URL | navigation, and "copy link to this tab". |
 | `{__aboard: 'active', tab}` posted OUT of the frame | the board announcing its own tab switches, so the sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the panel. Authenticated by `event.source`, never by origin. |
 | `{__aboard: 'theme', kind, tokens}` posted INTO the frame | the editor's colours, as the board's own 21 tokens. Per viewer, applied as inline custom properties, **written nowhere** — not the state file, not `localStorage`. Governed by the `aboard.theme` setting; see below. |
+| `{__aboard: 'clipboard-image', id, dataUrl}` posted OUT of the frame, `{__aboard: 'clipboard-result', id, ok, error}` back IN | the board asking this extension to put a PNG on the system clipboard, because a webview cannot. Handled in `src/clipboard.ts` by running `xclip`. The board does not know it is talking to VS Code — it asks whoever framed it and treats silence as a refusal. |
 | `{__aboard: 'newtab'}` posted INTO the frame | the sidebar's **New Tab** button. `?chrome=notabs` hides the board's whole tab strip including its own `+`, so this is how the button reaches the sheet — which the BOARD draws. Nothing about types or empty states passes through here, which is what keeps this repository free of the board's schema. |
 
 Four facts the design rests on:

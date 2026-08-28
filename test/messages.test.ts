@@ -50,3 +50,25 @@ describe('parseWebviewMessage', () => {
     assert.equal(parseWebviewMessage({ type: 'theme', vars: {}, bodyClass: 3 }), undefined);
   });
 });
+
+describe('parseWebviewMessage — clipboard-image', () => {
+  // The board asking the host to write a PNG to the system clipboard. Validated
+  // here because the payload is about to be decoded, written to disk and handed
+  // to another program: the shape check and the content check are two different
+  // jobs, and this is the first one.
+  it('accepts the shape the board sends', () => {
+    assert.deepEqual(
+      parseWebviewMessage({ type: 'clipboard-image', id: 3, dataUrl: 'data:image/png;base64,AAAA' }),
+      { type: 'clipboard-image', id: 3, dataUrl: 'data:image/png;base64,AAAA' },
+    );
+  });
+
+  it('refuses one with the wrong types', () => {
+    assert.equal(parseWebviewMessage({ type: 'clipboard-image', id: '3', dataUrl: 'x' }), undefined);
+    assert.equal(parseWebviewMessage({ type: 'clipboard-image', id: 3 }), undefined);
+    assert.equal(parseWebviewMessage({ type: 'clipboard-image', id: 3, dataUrl: 42 }), undefined);
+    // NaN is a number and is not an id: it matches nothing on the way back, so a
+    // reply carrying it could never be paired with its request.
+    assert.equal(parseWebviewMessage({ type: 'clipboard-image', id: NaN, dataUrl: 'x' }), undefined);
+  });
+});
