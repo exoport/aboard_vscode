@@ -5,7 +5,7 @@ import { parseWebviewMessage } from '../src/messages';
 
 describe('parseWebviewMessage', () => {
   it('accepts the active announcement', () => {
-    assert.deepEqual(parseWebviewMessage({ type: 'active', tab: 'bb13' }), { type: 'active', tab: 'bb13' });
+    assert.deepEqual(parseWebviewMessage({ type: 'active', tab: 'ab13' }), { type: 'active', tab: 'ab13' });
   });
 
   it('accepts the page saying it is ready', () => {
@@ -40,7 +40,7 @@ describe('parseWebviewMessage', () => {
     assert.equal(parseWebviewMessage(undefined), undefined);
     assert.equal(parseWebviewMessage(null), undefined);
     assert.equal(parseWebviewMessage('active'), undefined);
-    assert.equal(parseWebviewMessage({ type: 'goto', tab: 'bb1' }), undefined);
+    assert.equal(parseWebviewMessage({ type: 'goto', tab: 'ab1' }), undefined);
     assert.equal(parseWebviewMessage({ type: 'active' }), undefined);
     assert.equal(parseWebviewMessage({ type: 'active', tab: '' }), undefined);
     assert.equal(parseWebviewMessage({ type: 'active', tab: 3 }), undefined);

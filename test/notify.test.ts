@@ -43,7 +43,7 @@ describe('the nudge indicator', { timeout: 30_000 }, () => {
     const { vscode, dispose } = runExtension(board.projectDir);
     try {
       await until('the tree to list the board’s tabs', 10_000, () =>
-        vscode.probe.rows.some((r) => r.description === 'bb71'),
+        vscode.probe.rows.some((r) => r.description === 'ab71'),
       );
       // Nobody waiting: the key is explicitly false, not merely absent. An
       // absent key evaluates false in a `when` clause too, but only a set one
@@ -206,7 +206,7 @@ describe('the nudge indicator', { timeout: 30_000 }, () => {
     const { vscode, dispose } = runExtension(board.projectDir);
     try {
       await until('the tree to list the board’s tabs', 10_000, () =>
-        vscode.probe.rows.some((r) => r.description === 'bb71'),
+        vscode.probe.rows.some((r) => r.description === 'ab71'),
       );
       assert.equal(waitingKey(vscode), false);
 

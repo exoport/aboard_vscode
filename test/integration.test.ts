@@ -184,7 +184,7 @@ async function writeAsAgent(board: Board, edit: (doc: Doc) => void, by = 'agent-
 async function requestRemovalOfAScratchTab(board: Board, name: string): Promise<string> {
   const doc = await board.state();
   const next = typeof doc.nextId === 'number' ? doc.nextId : 1;
-  const id = `bb${next}`;
+  const id = `ab${next}`;
   await writeAsAgent(board, (d) => {
     d.nextId = next + 1;
     d.tabs.push({ id, name, type: 'notes', note: 'made by the integration test', state: { text: 'scratch\n' } });
@@ -291,7 +291,7 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
       // The first paint is the board's own row, drawn before its document has
       // arrived; wait for the tabs themselves.
       const rows = await until('the tree to list the board’s tabs', 20_000, () => {
-        const tabs = vscode.probe.rows.filter((r: RenderedRow) => /^bb\d+$/.test(r.description ?? ''));
+        const tabs = vscode.probe.rows.filter((r: RenderedRow) => /^ab\d+$/.test(r.description ?? ''));
         return tabs.length > 0 ? tabs : undefined;
       });
       // One board: its tabs sit at the top level, no parent row.
@@ -357,7 +357,7 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
     let waiter: ChildProcess | undefined;
     try {
       await until('the tree to list the board’s tabs', 20_000, () =>
-        vscode.probe.rows.some((r: RenderedRow) => /^bb\d+$/.test(r.description ?? '')) || undefined,
+        vscode.probe.rows.some((r: RenderedRow) => /^ab\d+$/.test(r.description ?? '')) || undefined,
       );
       // Nobody waiting yet, and the extension says so rather than leaving the
       // key unset — a `when` clause cannot tell those apart, but a regression

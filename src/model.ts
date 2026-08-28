@@ -17,7 +17,7 @@ export interface TabItemModel {
   label: string;
   /** The id, because that is how tabs get referred to in prose and in chat. */
   description: string;
-  /** Markdown: `bb71 · Kanban`, then the note verbatim. */
+  /** Markdown: `ab71 · Kanban`, then the note verbatim. */
   tooltip: string;
   dot: DotKind;
   /** Drives the `when` clauses of the context menu. */
@@ -140,7 +140,7 @@ export function schemaMismatch(doc: Doc, caps: Capabilities | undefined): string
  * labelled "Copy link to this tab" — so on the board the two words already mean
  * two things, and only one of them has a function. The other one is the form the
  * skill tells every agent to use when it addresses the human ("the Migration
- * review tab (`bb32`)"), and it is what `referenceText` below builds. Keeping
+ * review tab (`ab32`)"), and it is what `referenceText` below builds. Keeping
  * this one called `referenceFor` would have made `copyReference` call it, which
  * is exactly the confusion the human found: the sidebar offered "Copy Link to
  * This Tab" under the command id `aboard.copyReference` and no way to copy a
@@ -152,7 +152,7 @@ export function linkFor(boardUrl: string, tabId: string, nodeId?: string): strin
 }
 
 /**
- * A tab as it should appear in a sentence: `Migration review (bb32)`.
+ * A tab as it should appear in a sentence: `Migration review (ab32)`.
  *
  * The rule is the skill's, under *Ids do not travel in both directions*: an id
  * coming FROM the human is enough, because they can read the state file; an id
@@ -160,13 +160,13 @@ export function linkFor(boardUrl: string, tabId: string, nodeId?: string): strin
  * rides beside it as a handle.
  *
  * **No backticks**, which is a judgement call: the skill's examples are markdown
- * and write `` (`bb32`) ``, but this string goes on the system clipboard with no
+ * and write `` (`ab32`) ``, but this string goes on the system clipboard with no
  * idea where it lands — a commit message, a terminal, a chat box, a code
  * comment. Plain text reads correctly in all of them; markdown that arrives
  * somewhere plain does not.
  *
  * A tab with no name has no name to give, so it degrades to the bare id rather
- * than to `(unnamed) (bb71)`. That makes it identical to Copy Id for exactly the
+ * than to `(unnamed) (ab71)`. That makes it identical to Copy Id for exactly the
  * tabs where the two questions have the same answer, which is honest.
  */
 export function referenceText(name: string | undefined, tabId: string): string {
@@ -197,7 +197,7 @@ export function referenceText(name: string | undefined, tabId: string): string {
  * because it is load-bearing in a file no unit test can load.
  *
  * The `r` counter is not decoration. The board does not write the hash back when
- * the human switches tabs from inside it, so the URL can already read `#tab=bb71`
+ * the human switches tabs from inside it, so the URL can already read `#tab=ab71`
  * while the page shows something else — and setting a fragment to the value it
  * already has fires no `hashchange`, so the click would do nothing.
  */

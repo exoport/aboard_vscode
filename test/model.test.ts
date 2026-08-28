@@ -34,11 +34,11 @@ const doc = (): Doc => ({
   rev: 41,
   nextId: 200,
   tabs: [
-    { id: 'bb71', name: 'Build queue', type: 'kanban', note: 'where work lands' },
-    { id: 'bb1', name: '', type: 'dag', touched: { by: 'agent-1', at: '2026-08-25T10:00:00Z', note: 'added a node' } },
-    { id: 'bb9', name: 'Old', type: 'markup', pendingRemoval: { by: 'agent-2', at: 'now', reason: 'superseded' } },
+    { id: 'ab71', name: 'Build queue', type: 'kanban', note: 'where work lands' },
+    { id: 'ab1', name: '', type: 'dag', touched: { by: 'agent-1', at: '2026-08-25T10:00:00Z', note: 'added a node' } },
+    { id: 'ab9', name: 'Old', type: 'markup', pendingRemoval: { by: 'agent-2', at: 'now', reason: 'superseded' } },
     {
-      id: 'bb12',
+      id: 'ab12',
       name: 'Both',
       type: 'kanban',
       touched: { by: 'agent-1', at: 'now' },
@@ -51,22 +51,22 @@ describe('tabItems', () => {
   it('keeps document order — the order is the human’s', () => {
     assert.deepEqual(
       tabItems(doc(), typeLabels(caps)).map((i) => i.id),
-      ['bb71', 'bb1', 'bb9', 'bb12'],
+      ['ab71', 'ab1', 'ab9', 'ab12'],
     );
   });
 
   it('labels an unnamed tab the way the board does, and shows the id as the description', () => {
     const items = tabItems(doc(), typeLabels(caps));
     assert.equal(items[1]!.label, '(unnamed)');
-    assert.equal(items[1]!.description, 'bb1');
+    assert.equal(items[1]!.description, 'ab1');
   });
 
   it('takes the type label from /capabilities and falls back to the raw type', () => {
     const items = tabItems(doc(), typeLabels(caps));
-    assert.match(items[0]!.tooltip, /`bb71` · Kanban/);
+    assert.match(items[0]!.tooltip, /`ab71` · Kanban/);
     // `markup` is not in this manifest: a sixteenth renderer must need no change
     // here, so an unknown type shows its own name rather than nothing.
-    assert.match(items[2]!.tooltip, /`bb9` · markup/);
+    assert.match(items[2]!.tooltip, /`ab9` · markup/);
   });
 
   it('puts the note in the tooltip verbatim', () => {
@@ -116,7 +116,7 @@ describe('badgeCount', () => {
   });
 
   it('is zero for a board nobody has touched', () => {
-    assert.equal(badgeCount({ tabs: [{ id: 'bb1', type: 'dag' }] }), 0);
+    assert.equal(badgeCount({ tabs: [{ id: 'ab1', type: 'dag' }] }), 0);
   });
 });
 
@@ -139,8 +139,8 @@ describe('schemaMismatch', () => {
 
 describe('linkFor', () => {
   it('builds the same deep link the board’s own menu copies', () => {
-    assert.equal(linkFor('http://127.0.0.1:41234/', 'bb71'), 'http://127.0.0.1:41234/#tab=bb71');
-    assert.equal(linkFor('http://127.0.0.1:41234/b/', 'bb71', 'bb9'), 'http://127.0.0.1:41234/b/#tab=bb71&node=bb9');
+    assert.equal(linkFor('http://127.0.0.1:41234/', 'ab71'), 'http://127.0.0.1:41234/#tab=ab71');
+    assert.equal(linkFor('http://127.0.0.1:41234/b/', 'ab71', 'ab9'), 'http://127.0.0.1:41234/b/#tab=ab71&node=ab9');
   });
 });
 
@@ -150,40 +150,40 @@ describe('referenceText', () => {
   // way to copy the form the skill tells every agent to write when it addresses
   // the human — the name, with the id beside it as a handle.
   it('names the thing and puts the id beside it', () => {
-    assert.equal(referenceText('Migration review', 'bb32'), 'Migration review (bb32)');
+    assert.equal(referenceText('Migration review', 'ab32'), 'Migration review (ab32)');
   });
 
   it('is plain text, because a clipboard has no idea where it lands', () => {
     // No backticks and no markdown: this string goes into commit messages and
     // terminals as often as into chat.
-    assert.equal(referenceText('Build queue', 'bb71'), 'Build queue (bb71)');
-    assert.doesNotMatch(referenceText('Build queue', 'bb71'), /[`*_]/);
+    assert.equal(referenceText('Build queue', 'ab71'), 'Build queue (ab71)');
+    assert.doesNotMatch(referenceText('Build queue', 'ab71'), /[`*_]/);
   });
 
   it('degrades to the bare id when there is no name to give', () => {
-    // Not `(unnamed) (bb71)`. The board's own placeholder is not a name, and
+    // Not `(unnamed) (ab71)`. The board's own placeholder is not a name, and
     // neither is whitespace.
-    assert.equal(referenceText(undefined, 'bb71'), 'bb71');
-    assert.equal(referenceText('', 'bb71'), 'bb71');
-    assert.equal(referenceText('   ', 'bb71'), 'bb71');
-    assert.equal(referenceText('(unnamed)', 'bb71'), 'bb71');
+    assert.equal(referenceText(undefined, 'ab71'), 'ab71');
+    assert.equal(referenceText('', 'ab71'), 'ab71');
+    assert.equal(referenceText('   ', 'ab71'), 'ab71');
+    assert.equal(referenceText('(unnamed)', 'ab71'), 'ab71');
   });
 
   it('trims, so a name typed with a trailing space still reads right', () => {
-    assert.equal(referenceText('  Decisions  ', 'bb128'), 'Decisions (bb128)');
+    assert.equal(referenceText('  Decisions  ', 'ab128'), 'Decisions (ab128)');
   });
 });
 
 describe('frameSrc', () => {
   it('asks for the tab strip to be hidden', () => {
-    assert.match(frameSrc('http://127.0.0.1:41234/', 'bb71', 1), /\?chrome=notabs/);
+    assert.match(frameSrc('http://127.0.0.1:41234/', 'ab71', 1), /\?chrome=notabs/);
   });
 
   it('changes on every call, or the fragment fires no hashchange', () => {
-    const a = frameSrc('http://127.0.0.1:41234/', 'bb71', 1);
-    const b = frameSrc('http://127.0.0.1:41234/', 'bb71', 2);
+    const a = frameSrc('http://127.0.0.1:41234/', 'ab71', 1);
+    const b = frameSrc('http://127.0.0.1:41234/', 'ab71', 2);
     assert.notEqual(a, b);
-    assert.match(a, /#tab=bb71&r=1$/);
+    assert.match(a, /#tab=ab71&r=1$/);
   });
 
   it('has no fragment at all before a tab is chosen', () => {
@@ -196,29 +196,29 @@ describe('frameSrc', () => {
   // pinned the exact shape, so the suspicion cost a reading of the file. It is
   // pinned now: `<base>?chrome=notabs#tab=<id>&r=<n>`, in that order.
   it('is exactly ?chrome=notabs#tab=<id>&r=<n>', () => {
-    assert.equal(frameSrc('http://127.0.0.1:41234/', 'bb13', 7), 'http://127.0.0.1:41234/?chrome=notabs#tab=bb13&r=7');
+    assert.equal(frameSrc('http://127.0.0.1:41234/', 'ab13', 7), 'http://127.0.0.1:41234/?chrome=notabs#tab=ab13&r=7');
   });
 
   it('keeps a base path, and joins with & when the URL already has a query', () => {
     assert.equal(
-      frameSrc('http://127.0.0.1:41234/prefix/', 'bb13', 1),
-      'http://127.0.0.1:41234/prefix/?chrome=notabs#tab=bb13&r=1',
+      frameSrc('http://127.0.0.1:41234/prefix/', 'ab13', 1),
+      'http://127.0.0.1:41234/prefix/?chrome=notabs#tab=ab13&r=1',
     );
     assert.equal(
-      frameSrc('http://127.0.0.1:41234/?nosse=1', 'bb13', 1),
-      'http://127.0.0.1:41234/?nosse=1&chrome=notabs#tab=bb13&r=1',
+      frameSrc('http://127.0.0.1:41234/?nosse=1', 'ab13', 1),
+      'http://127.0.0.1:41234/?nosse=1&chrome=notabs#tab=ab13&r=1',
     );
   });
 
   it('escapes the tab id rather than pasting it into the fragment', () => {
-    assert.equal(frameSrc('http://127.0.0.1:41234/', 'bb 1&r=9', 2), 'http://127.0.0.1:41234/?chrome=notabs#tab=bb%201%26r%3D9&r=2');
+    assert.equal(frameSrc('http://127.0.0.1:41234/', 'ab 1&r=9', 2), 'http://127.0.0.1:41234/?chrome=notabs#tab=ab%201%26r%3D9&r=2');
   });
 
   // media/panel.html accepts a `goto` only for a src that starts with the one the
   // frame was rendered with, and the frame is rendered with frameSrc(url, undefined, 0).
   it('every value starts with the no-tab form panel.html pins', () => {
     const base = frameSrc('http://127.0.0.1:41234/', undefined, 0);
-    for (const id of ['bb1', 'bb999', 'weird id']) {
+    for (const id of ['ab1', 'ab999', 'weird id']) {
       assert.ok(frameSrc('http://127.0.0.1:41234/', id, 3).startsWith(base));
     }
   });
@@ -227,44 +227,44 @@ describe('frameSrc', () => {
 describe('the edits', () => {
   it('dismiss drops the marker, and reports nothing to do when there is none', () => {
     const d = doc();
-    assert.equal(dismissChange('bb1')(d), true);
+    assert.equal(dismissChange('ab1')(d), true);
     assert.equal('touched' in d.tabs[1]!, false);
-    assert.equal(dismissChange('bb71')(doc()), false);
+    assert.equal(dismissChange('ab71')(doc()), false);
     assert.equal(dismissChange('nope')(doc()), false);
   });
 
   it('approve removes the tab', () => {
     const d = doc();
-    assert.equal(approveRemoval('bb9')(d), true);
+    assert.equal(approveRemoval('ab9')(d), true);
     assert.deepEqual(
       d.tabs.map((t) => t.id),
-      ['bb71', 'bb1', 'bb12'],
+      ['ab71', 'ab1', 'ab12'],
     );
-    assert.equal(approveRemoval('bb9')(d), false);
+    assert.equal(approveRemoval('ab9')(d), false);
   });
 
   it('deny keeps the tab and drops the request', () => {
     const d = doc();
-    assert.equal(denyRemoval('bb9')(d), true);
+    assert.equal(denyRemoval('ab9')(d), true);
     assert.equal(d.tabs.length, 4);
     assert.equal('pendingRemoval' in d.tabs[2]!, false);
-    assert.equal(denyRemoval('bb71')(doc()), false);
+    assert.equal(denyRemoval('ab71')(doc()), false);
   });
 
   it('rename sets the name and skips a no-op', () => {
     const d = doc();
-    assert.equal(renameTab('bb71', 'Queue')(d), true);
+    assert.equal(renameTab('ab71', 'Queue')(d), true);
     assert.equal(d.tabs[0]!.name, 'Queue');
-    assert.equal(renameTab('bb71', 'Build queue')(doc()), false);
+    assert.equal(renameTab('ab71', 'Build queue')(doc()), false);
   });
 
   it('a note is trimmed, and an empty one removes the field rather than storing ""', () => {
     const d = doc();
-    assert.equal(setNote('bb71', '  read me  ')(d), true);
+    assert.equal(setNote('ab71', '  read me  ')(d), true);
     assert.equal(d.tabs[0]!.note, 'read me');
-    assert.equal(setNote('bb71', '')(d), true);
+    assert.equal(setNote('ab71', '')(d), true);
     assert.equal('note' in d.tabs[0]!, false);
-    assert.equal(setNote('bb71', '')(d), false);
+    assert.equal(setNote('ab71', '')(d), false);
   });
 });
 
@@ -277,7 +277,7 @@ describe('the frameSrc prefix invariant', () => {
   it('every tab src starts with the src the frame was rendered with', () => {
     for (const url of ['http://127.0.0.1:41234/', 'http://127.0.0.1:41234/brd/', 'https://x-41234.app.github.dev/']) {
       const initial = frameSrc(url, undefined, 0);
-      for (const tab of ['bb1', 'bb71', 'bb999']) {
+      for (const tab of ['ab1', 'ab71', 'ab999']) {
         for (const n of [1, 2, 17]) {
           assert.ok(
             frameSrc(url, tab, n).startsWith(initial),

@@ -288,7 +288,7 @@ describe('the panel page', () => {
     // page turns out to be wrong about must cost a colour and never a sidebar
     // click. The src-prefix pin is what confines the same grandchild there, and
     // it still does.
-    page.fromNested({ type: 'goto', src: 'http://evil.example/#tab=bb1&r=9' });
+    page.fromNested({ type: 'goto', src: 'http://evil.example/#tab=ab1&r=9' });
     assert.equal(page.src(), SRC);
 
     // The host still gets through on the same page.
@@ -419,12 +419,12 @@ describe('the panel page', () => {
   it('still does the two things it did before', () => {
     const page = runPage({});
     // The board announcing its own tab switch, forwarded to the host.
-    page.fromBoard({ __aboard: 'active', tab: 'bb13' });
-    assert.deepEqual(plain(page.toHost.filter((m) => m['type'] === 'active')), [{ type: 'active', tab: 'bb13' }]);
+    page.fromBoard({ __aboard: 'active', tab: 'ab13' });
+    assert.deepEqual(plain(page.toHost.filter((m) => m['type'] === 'active')), [{ type: 'active', tab: 'ab13' }]);
     // A goto from the host, pinned to the src the frame was rendered with.
-    page.fromHost({ type: 'goto', src: `${SRC}#tab=bb13&r=1` });
-    assert.equal(page.src(), `${SRC}#tab=bb13&r=1`);
-    page.fromHost({ type: 'goto', src: 'http://evil.example/#tab=bb13&r=2' });
-    assert.equal(page.src(), `${SRC}#tab=bb13&r=1`);
+    page.fromHost({ type: 'goto', src: `${SRC}#tab=ab13&r=1` });
+    assert.equal(page.src(), `${SRC}#tab=ab13&r=1`);
+    page.fromHost({ type: 'goto', src: 'http://evil.example/#tab=ab13&r=2' });
+    assert.equal(page.src(), `${SRC}#tab=ab13&r=1`);
   });
 });

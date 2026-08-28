@@ -685,7 +685,7 @@ class Controller implements vscode.Disposable {
   }
 
   /**
-   * The tab as it should appear in a sentence — `Migration review (bb32)`.
+   * The tab as it should appear in a sentence — `Migration review (ab32)`.
    *
    * Separate from Copy Link, and that separation is the whole fix: this command
    * used to be titled "Copy Link to This Tab" and put a URL on the clipboard, so

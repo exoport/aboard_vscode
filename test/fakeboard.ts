@@ -65,9 +65,9 @@ export const DOC = {
   updatedAt: '2026-08-26T13:33:30Z',
   nextId: 40,
   tabs: [
-    { id: 'bb1', name: 'Migration review', type: 'stack' },
-    { id: 'bb71', name: 'Build queue', type: 'kanban' },
-    { id: 'bb99', type: 'notes' },
+    { id: 'ab1', name: 'Migration review', type: 'stack' },
+    { id: 'ab71', name: 'Build queue', type: 'kanban' },
+    { id: 'ab99', type: 'notes' },
   ],
 };
 

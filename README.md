@@ -121,7 +121,7 @@ Four facts the design rests on:
   reloading the page**, which is why switching tabs from the sidebar costs no
   reload, no dropped SSE stream and no lost zoom. A changing `r=` counter rides
   along because the board does not write the hash back when the human switches
-  tabs inside it, so the URL can already read `#tab=bb71` while the page shows
+  tabs inside it, so the URL can already read `#tab=ab71` while the page shows
   something else.
 - **The editor's colours exist only inside the webview.** VS Code puts the live
   theme on the webview document's root as `--vscode-*` custom properties; the
@@ -232,7 +232,7 @@ ids moved.)*
 
 - **Tree** in `aboard.json` order, always — the order is the human's. Label is the
   tab name (`(unnamed)` when empty, as the board itself says), description is the
-  id, tooltip is `bb71 · Kanban` from `/capabilities` followed by the tab's `note`
+  id, tooltip is `ab71 · Kanban` from `/capabilities` followed by the tab's `note`
   verbatim. A periwinkle dot for a changed tab, red for a removal request, removal
   winning when a tab has both. `TreeView.badge` counts the changed ones.
 - **Panel**: one `<iframe>` on the running board, `retainContextWhenHidden`, and
@@ -248,8 +248,8 @@ ids moved.)*
   there is no panel for a sheet to open in.
 - **Actions**, all writes the board permits from a human: dismiss a change,
   approve or deny a removal request, rename, set the note, notify a waiting
-  session, and three separate copies — the id (`bb32`), the **reference**
-  (`Migration review (bb32)`, the form the board's docs tell agents to write when
+  session, and three separate copies — the id (`ab32`), the **reference**
+  (`Migration review (ab32)`, the form the board's docs tell agents to write when
   they address a human) and the **link** (the deep link the board's own right-click
   menu builds). They were one command copying a URL until 2026-08-26; see below.
 - **A nudge button that says whether anybody is listening.** The view-title button is

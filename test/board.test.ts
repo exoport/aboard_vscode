@@ -33,7 +33,7 @@ async function startStub(over: Partial<Doc> = {}): Promise<Stub> {
     server: undefined as unknown as http.Server,
     port: 0,
     posts: [],
-    doc: { version: 3, rev: 41, updatedAt: '2026-08-25T11:03:09Z', nextId: 200, tabs: [{ id: 'bb1', name: 'One', type: 'dag' }], ...over },
+    doc: { version: 3, rev: 41, updatedAt: '2026-08-25T11:03:09Z', nextId: 200, tabs: [{ id: 'ab1', name: 'One', type: 'dag' }], ...over },
     raceOnce: false,
     alwaysConflict: false,
     get listeners() {
@@ -148,7 +148,7 @@ describe('reads', () => {
   it('reads the document, the manifest, the waiters and health', async () => {
     const stub = await startStub();
     const board = boardFor(stub);
-    assert.equal((await board.state()).tabs[0]!.id, 'bb1');
+    assert.equal((await board.state()).tabs[0]!.id, 'ab1');
     assert.equal((await board.capabilities()).schema, 3);
     assert.equal((await board.waiters()).waiting, 1);
     assert.equal((await board.health()).app, 'aboard');
@@ -193,7 +193,7 @@ describe('write', () => {
     stub.raceOnce = true;
     const board = boardFor(stub);
     const result = await board.write((doc) => {
-      doc.tabs.push({ id: 'bb2', name: 'Two', type: 'dag' });
+      doc.tabs.push({ id: 'ab2', name: 'Two', type: 'dag' });
     });
     assert.equal(stub.posts.length, 2);
     // The retry is built on the document that is actually there, not a replay of

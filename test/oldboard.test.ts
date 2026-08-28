@@ -66,8 +66,8 @@ const DOC = {
   updatedAt: '2026-08-26T13:33:30Z',
   nextId: 40,
   tabs: [
-    { id: 'bb1', name: 'Roadmap', type: 'dag', touched: { by: 'agent-1', at: '2026-08-26T13:33:30Z', note: 'new tab' } },
-    { id: 'bb6', name: 'Sprint Board', type: 'kanban' },
+    { id: 'ab1', name: 'Roadmap', type: 'dag', touched: { by: 'agent-1', at: '2026-08-26T13:33:30Z', note: 'new tab' } },
+    { id: 'ab6', name: 'Sprint Board', type: 'kanban' },
   ],
 };
 
@@ -184,7 +184,7 @@ describe('a board older than the ?chrome= contract', { timeout: 30_000 }, () => 
       );
 
       // The tabs still render, dots and all: an old board is usable, not broken.
-      const row = vscode.probe.rows.find((r) => r.description === 'bb1');
+      const row = vscode.probe.rows.find((r) => r.description === 'ab1');
       assert.ok(row, 'the tree should still list the board’s tabs');
       assert.equal(path.basename(row.iconPath ?? ''), 'dot-change.svg');
     } finally {
