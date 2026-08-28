@@ -302,6 +302,45 @@ the command from what is actually on `PATH` rather than guessing:
 After launching either, `/health` is polled for a few seconds rather than assumed
 successful.
 
+## The clipboard
+
+The board's markup renderer copies a cropped region of an image as a PNG. In a browser it
+uses `navigator.clipboard.write` and that is the end of it. **In a webview it cannot, and
+never will**: Chromium refuses with *"The Clipboard API has been blocked because of a
+permissions policy applied to the current document"*, the webview document holds that
+policy, and VS Code exposes no way to lift it — `WebviewOptions` has no permission field,
+and `vscode.env.clipboard` is `readText()`/`writeText(string)`, text only. `media/panel.html`
+does send `allow="clipboard-write"`, which is necessary and not sufficient: a frame can only
+be delegated a permission its parent already holds.
+
+So the **extension host** does it, because the extension host is Node and can run a
+program. The board posts `{__aboard:'clipboard-image', id, dataUrl}` out of the frame,
+`src/clipboard.ts` writes a temp PNG and runs `xclip` (or `wl-copy`), and the answer goes
+back as `{__aboard:'clipboard-result', id, ok, error}`. The board does not know it is
+talking to VS Code and does not check: it asks whoever framed it, and a host that does not
+implement this simply never replies, which its timeout turns into the refusal it already
+handled.
+
+**The bug worth remembering, because it cost a round trip and looked like the opposite of
+itself.** `xclip` takes ownership of the X selection by **forking**: the foreground process
+reads the image and exits `0` in about a millisecond, and a background process stays alive
+to serve the selection — holding the stderr pipe it inherited. Node's `close` event fires
+on exit **and** stdio EOF, so it never fired. The five-second timeout then reported a
+failure on a copy that had already succeeded, and the human saw the fallback dialog with
+the image correctly on their clipboard behind it. `exit` is the event that answers the
+question actually being asked.
+
+It had a second face: a live child's inherited pipe is an **active handle**, so the old
+version kept `node --test` from exiting at all — the fails-before run had to be killed
+after ten minutes. In a real extension host that is a leaked descriptor per copy. Our end
+of the pipe is destroyed on exit now, and the timeout no longer kills the child, because
+on these tools the process that matters is the one that already forked.
+
+`wl-copy` behaves identically, and is tried **first** on a Wayland session. macOS and
+Windows are refused by name rather than guessed at; a missing tool is reported with the
+command to install it, and the board still offers the picture and **Add this picture to
+the tab**, which needs no permission at all.
+
 ## The theme
 
 `aboard.theme` is `follow` (the default) or `board`. Under `board` the extension
