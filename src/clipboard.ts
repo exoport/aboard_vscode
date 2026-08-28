@@ -127,7 +127,9 @@ function runTool(
       resolve(outcome);
     };
     const timer = setTimeout(() => {
-      child.kill();
+      // Only reached if the tool genuinely wedges before exiting. It is NOT
+      // killed: on these tools the process that matters is the one that already
+      // forked, and killing the group would take the clipboard's owner with it.
       done({ ok: false, error: `${tool.cmd} did not finish within ${TOOL_TIMEOUT_MS}ms` });
     }, TOOL_TIMEOUT_MS);
 
@@ -140,7 +142,26 @@ function runTool(
       // a spawn failure.
       done({ ok: false, error: err.code === 'ENOENT' ? `${tool.cmd} is not installed` : String(err) });
     });
-    child.on('close', (code) => {
+    // `exit`, NOT `close`, and this is the whole reason the feature did not work.
+    //
+    // xclip takes ownership of the X selection by FORKING: the foreground
+    // process reads the image and exits 0 immediately — measured at 0.00s — and
+    // a background process stays alive to serve the selection for as long as it
+    // is owned. That background process inherits this stderr pipe.
+    //
+    // `close` fires when the process has exited AND every stdio stream has
+    // ended, so it never fired: the daemon holds the pipe open by design. The
+    // five-second timeout then reported a failure on a copy that had already
+    // succeeded, and the human saw the fallback dialog with the clipboard
+    // correctly loaded behind it. `exit` fires on the exit itself and says
+    // nothing about the pipes, which is exactly the question being asked.
+    //
+    // wl-copy does the same thing for the same reason.
+    child.on('exit', (code) => {
+      // Our end of the pipe is released here rather than left to the daemon,
+      // which will not close it. One leaked fd per copy is not much and is
+      // still a leak.
+      child.stderr?.destroy();
       if (code === 0) {
         done({ ok: true, tool: tool.cmd });
         return;
@@ -167,6 +188,7 @@ function runTool(
 export async function copyImageToClipboard(
   dataUrl: unknown,
   platform: string = process.platform,
+  session: string = process.env.XDG_SESSION_TYPE ?? '',
 ): Promise<ClipboardOutcome> {
   const png = decodePng(dataUrl);
   if (!png) {
@@ -185,7 +207,14 @@ export async function copyImageToClipboard(
 
   try {
     let lastError = '';
-    for (const tool of CLIPBOARD_TOOLS) {
+    // The native tool first on a Wayland session. xclip usually still works
+    // there through XWayland — it does on the machine this was written on — but
+    // "usually" is not a reason to ask the compatibility layer first when the
+    // real one may be installed.
+    const tools = session === 'wayland'
+      ? [...CLIPBOARD_TOOLS].sort((a, b) => Number(b.cmd === 'wl-copy') - Number(a.cmd === 'wl-copy'))
+      : CLIPBOARD_TOOLS;
+    for (const tool of tools) {
       const outcome = await runTool(tool, file, png);
       if (outcome.ok) {
         return outcome;

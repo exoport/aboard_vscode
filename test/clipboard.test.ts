@@ -14,7 +14,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import { describe, it } from 'node:test';
 
-import { CLIPBOARD_TOOLS, copyImageToClipboard, decodePng, missingToolMessage } from '../src/clipboard';
+import { CLIPBOARD_TOOLS, copyImageToClipboard, decodePng, missingToolMessage, TOOL_TIMEOUT_MS } from '../src/clipboard';
 
 /** The smallest real PNG: an 8-byte signature is all decodePng inspects. */
 const PNG = Buffer.concat([
@@ -116,3 +116,45 @@ async function tmpClipFiles(): Promise<string[]> {
   const names = await fs.readdir(os.tmpdir()).catch(() => [] as string[]);
   return names.filter((n) => n.startsWith('aboard-clip-')).sort();
 }
+
+describe('the real clipboard tool', () => {
+  // The one case that needs an actual binary, and the one that shipped broken.
+  //
+  // xclip takes the X selection by FORKING: the foreground process exits 0 in
+  // about a millisecond and a background process stays alive to serve it, holding
+  // the stderr pipe it inherited. Listening for Node's `close` — exit AND stdio
+  // EOF — therefore never fired, the five-second timeout reported a failure, and
+  // the human saw the fallback dialog with the image correctly on their clipboard
+  // behind it. Reported 2026-08-28 as "I installed xclip and it still shows the
+  // modal". wl-copy behaves the same way.
+  //
+  // So the TIME is the assertion. A `close`-based implementation takes the whole
+  // timeout and fails; this one answers in milliseconds.
+  it('answers in milliseconds, not when a forked daemon closes its pipes', async () => {
+    if (process.platform !== 'linux') {
+      console.log(`[clipboard] SKIPPED: ${process.platform} has no tool this extension knows`);
+      return;
+    }
+    const started = Date.now();
+    const out = await copyImageToClipboard(DATA_URL, 'linux');
+    const took = Date.now() - started;
+
+    // Loud, never silent — the same posture as the integration test. A machine
+    // with no tool or no display cannot answer this, and must say which.
+    if (!out.ok && /is not installed/.test(out.error ?? '')) {
+      console.log('[clipboard] SKIPPED: no xclip or wl-copy here — install one and this case runs');
+      return;
+    }
+    if (!out.ok && /display|DISPLAY/i.test(out.error ?? '')) {
+      console.log(`[clipboard] SKIPPED: a tool is installed but there is no display (${out.error})`);
+      return;
+    }
+
+    assert.equal(out.ok, true, `a clipboard tool is present and the copy failed: ${out.error}`);
+    assert.ok(CLIPBOARD_TOOLS.some((t) => t.cmd === out.tool), `copied with an unknown tool ${out.tool}`);
+    assert.ok(
+      took < TOOL_TIMEOUT_MS / 2,
+      `the copy took ${took}ms of a ${TOOL_TIMEOUT_MS}ms budget — it is waiting for the daemon's pipes again`,
+    );
+  });
+});
