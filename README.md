@@ -742,11 +742,33 @@ work.
 `@vscode/vsce` is a dev dependency and `npm run package` is the whole step:
 
 ```sh
+npm run install:dev     # package, force-install, and PRINT the installed version
+```
+
+which is the three steps below in one, ending in the line that answers "did it land":
+
+```sh
 npm run package                                      # → aboard-vscode-<version>.vsix
                                                      #   (removes the previous build first, so the
                                                      #    glob below always matches exactly one file)
 code --install-extension aboard-vscode-*.vsix --force
+code --list-extensions --show-versions | grep aboard-vscode
 ```
+
+**Use the one-liner, and read its last line.** An install that does not land looks
+exactly like a bug in whatever you were testing, and on 2026-08-28 that cost four rounds
+of "reinstalled, restarted, still broken" against an extension from three hours earlier —
+while the board, the bridge and `xclip` were all correct. Two things made it invisible:
+every dev build carried the same version, so the extensions view could not tell them
+apart; and `npm run package` deletes the previous `.vsix`, so a shell-history command
+naming the old filename fails on a missing file and scrolls away. The version moves per
+dev build now, `install:dev` prints what is actually installed, and the extension writes
+`aboard-vscode <version> activated` to the **Aboard** output channel — three independent
+answers to the same question, because the question kept getting the wrong one.
+
+A new version is a new folder under `~/.vscode/extensions/`; the old one stays on disk
+until VS Code cleans it up, listed in `.obsolete`. **The window must be reloaded** for the
+extension host to pick it up — *Developer: Reload Window*.
 
 `package` runs `vsce package`, which runs `vscode:prepublish` → `npm run build` first, so
 the bundle in the archive is always built from the tree it was packaged from. The result

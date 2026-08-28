@@ -305,6 +305,7 @@
     "pretest": "tsc -p tsconfig.test.json",
     "test": "node --test out/test/*.test.js",
     "package": "rm -f aboard-vscode-*.vsix && vsce package",
+    "install:dev": "npm run package && code --install-extension aboard-vscode-*.vsix --force && code --list-extensions --show-versions | grep aboard-vscode",
     "vscode:prepublish": "npm run build"
   },
   "devDependencies": {
