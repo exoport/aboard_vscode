@@ -94,7 +94,24 @@
       frame.addEventListener('load', () => {
         loaded = true;
         paint();
+        announce();
       });
+
+      // Tell the board what this host can do for it, rather than making it ask
+      // and wait to find out. The board cannot write an image to the clipboard
+      // in here; this extension can, by running xclip. Without the announcement
+      // the only way to discover that is to try and time out, and a timeout
+      // cannot tell "no host" from "an old host" from "the host is broken" —
+      // which is exactly the report that could not be diagnosed on 2026-08-28.
+      //
+      // Sent on every frame load, because the board reloads itself when its own
+      // code changes and a reloaded document has been told nothing.
+      function announce() {
+        if (!frame.contentWindow) {
+          return;
+        }
+        frame.contentWindow.postMessage({ __aboard: 'host', name: 'vscode', clipboard: true }, '*');
+      }
 
       // Switching between a light and a dark theme changes this class. Switching
       // between two dark themes does not — it changes the VALUES — which is why

@@ -369,6 +369,29 @@ describe('the panel page', () => {
     assert.equal(page.toFrame.length, after, 'a nested frame forged a clipboard result');
   });
 
+  it('tells the board what this host can do, on every load', () => {
+    const page = runPage({ '--vscode-editor-background': '#1f1f1f' });
+    const announced = () => page.toFrame.filter((p) => p.data['__aboard'] === 'host');
+
+    // Nothing before the frame has a document in it: a message posted at one is
+    // simply lost, which is the same reason `paint` holds the theme back.
+    assert.equal(announced().length, 0, 'the page announced into a frame with nothing in it');
+
+    page.load();
+    assert.equal(announced().length, 1, 'the board was never told what its host can do');
+    assert.deepEqual(plain(announced()[0]!.data), {
+      __aboard: 'host',
+      name: 'vscode',
+      clipboard: true,
+    });
+
+    // And again on the next load. The board reloads itself when its own code
+    // changes, and a reloaded document has been told nothing — which is
+    // indistinguishable, from the board's side, from a host too old to say.
+    page.load();
+    assert.equal(announced().length, 2, 'a reloaded board was left thinking it had no host');
+  });
+
   it('delegates clipboard-write to the board frame', () => {
     // The board's markup renderer copies a cropped image region to the
     // clipboard. In here the board is a cross-origin frame, so the permission
