@@ -57,6 +57,16 @@ function themeMode(): ThemeMode {
  */
 const CHROME_PROBE_TRIES = 3;
 
+/**
+ * How long a dropped event stream is given to come back before every board is
+ * re-verified. See `scheduleRecheck`.
+ *
+ * Long enough that a reconnect usually wins and the check is a no-op costing one
+ * `/health`; short enough that a human staring at a sidebar for a board they
+ * just stopped does not out-wait it.
+ */
+const RECHECK_DELAY_MS = 3000;
+
 class Controller implements vscode.Disposable {
   private readonly provider: BoardTreeProvider;
   private readonly view: vscode.TreeView<Node>;
@@ -82,6 +92,8 @@ class Controller implements vscode.Disposable {
   /** How many times a board's shell could not be read at all. */
   private chromeUnreadable = new Map<string, number>();
   private reloadTimers = new Map<string, NodeJS.Timeout>();
+  /** Pending re-verify after a stream drop; `undefined` means none is owed. */
+  private recheckTimer: NodeJS.Timeout | undefined;
   private discovering = false;
   private discoverAgain = false;
   private disposed = false;
@@ -193,6 +205,20 @@ class Controller implements vscode.Disposable {
       onStatus: (connected, detail) => {
         if (!connected) {
           this.log(`event stream for ${board.title} dropped: ${detail ?? 'unknown'} — reconnecting`);
+          // A dropped stream is the ONLY signal that a board has died.
+          //
+          // Nothing else arrives: aboard never removes `instance.json` — not on
+          // SIGTERM, not on any path — so the file watcher this controller
+          // relies on never fires for a death, only for a birth. Left at a bare
+          // `return`, `aboard.hasBoard` stayed true for as long as the extension
+          // host lived, both `viewsWelcome` clauses are gated on
+          // `!aboard.hasBoard`, and so the Start button was simply gone and the
+          // tree kept a dead board's tabs. The human's fix was to reload the
+          // window, which is not a fix.
+          //
+          // Re-check instead. `discover()` re-verifies every candidate, and a
+          // board that is really gone fails `/health` and drops out.
+          this.scheduleRecheck();
           return;
         }
         // Back up. Every frame sent while the stream was down is GONE — the
@@ -206,6 +232,30 @@ class Controller implements vscode.Disposable {
         void this.refreshWaiters(board);
       },
     });
+  }
+
+  /**
+   * Re-verify every board shortly, after something suggested one may be gone.
+   *
+   * THROTTLE, not debounce, and the difference is the whole correctness of it.
+   * A board that has died drops its stream, the SSE client retries, and the
+   * retry drops too — so the signal arrives repeatedly and forever. A debounce
+   * pushes its deadline out on every one of those and can starve indefinitely,
+   * which is the failure this method exists to end. An already-pending check is
+   * therefore left exactly where it is: the first drop fixes the deadline, and
+   * every drop after it is absorbed.
+   *
+   * The delay buys the reconnect a chance to succeed, so an ordinary blip
+   * costs one `/health` and changes nothing.
+   */
+  private scheduleRecheck(): void {
+    if (this.recheckTimer !== undefined || this.disposed) {
+      return;
+    }
+    this.recheckTimer = setTimeout(() => {
+      this.recheckTimer = undefined;
+      void this.discover();
+    }, RECHECK_DELAY_MS);
   }
 
   /**
@@ -756,6 +806,13 @@ class Controller implements vscode.Disposable {
     for (const t of this.reloadTimers.values()) {
       clearTimeout(t);
     }
+    // Disposing the streams below drops each one, and a drop calls onStatus.
+    // Clearing here would be undone by that if the ordering were all that
+    // protected us — it is not: `scheduleRecheck` refuses once `disposed` is
+    // set, which happened on the first line. This clear is for a check already
+    // armed before dispose was called.
+    clearTimeout(this.recheckTimer);
+    this.recheckTimer = undefined;
     for (const sub of this.streams.values()) {
       sub.dispose();
     }

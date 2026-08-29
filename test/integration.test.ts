@@ -477,4 +477,79 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
     const again = await board.write(denyRemoval(id));
     assert.equal(again.skipped, true, 'denying an already-answered request posted anyway');
   });
+
+  // The bug the human hit on 2026-08-29: the board was gone and the sidebar
+  // still believed in it, so the "Start the Board" button — gated on
+  // `!aboard.hasBoard` in BOTH viewsWelcome clauses — was simply absent, and
+  // the tree kept a dead board's tabs. Reloading the window was the only way
+  // out, which is not a fix.
+  //
+  // Why only sometimes, which is why it took a while to see: aboard DOES remove
+  // `instance.json` when it shuts down properly — on a clean return and on
+  // Ctrl-C/SIGTERM alike (server.go, "Remove the instance file on Ctrl-C too").
+  // That path was always fine: the file disappears, the watcher fires
+  // onDidDelete, discovery re-runs, the button comes back.
+  //
+  // The broken path is a board that never gets to run that code — SIGKILL, a
+  // crash, an OOM, a laptop suspended into oblivion, a parent terminal taken
+  // out from under it. The record survives verbatim, no filesystem event
+  // exists to notice, and the only remaining signal is the event stream
+  // dropping — which was logged and thrown away.
+  //
+  // So this test SIGKILLs. Using SIGTERM here would delete the record and
+  // silently exercise the path that already worked.
+  //
+  // This kills a REAL server, so it must stay LAST in this describe: every test
+  // above it needs the board alive. `stopBoard` tolerates an already-dead one.
+  it('drops a board that dies, so the Start button can come back', async () => {
+    const vscode = require('./vscode-stub') as typeof import('./vscode-stub');
+    const { activate } = require('../src/extension') as typeof import('../src/extension');
+
+    vscode.probe.reset();
+    vscode.workspace.workspaceFolders = [{ uri: { scheme: 'file', fsPath: projectDir } }];
+
+    const subscriptions: Array<{ dispose(): void }> = [];
+    activate({
+      subscriptions,
+      extensionUri: vscode.Uri.file(repoRoot),
+    } as unknown as Parameters<typeof activate>[0]);
+
+    try {
+      await until('the live board to be discovered', 20_000, () =>
+        vscode.probe.contexts.get('aboard.hasBoard') === true || undefined,
+      );
+
+      // SIGKILL, deliberately — see above. The process gets no chance to clean
+      // up, so the instance record stays on disk exactly as written, which is
+      // the whole premise.
+      assert.ok(server?.pid, 'no server to kill');
+      const exited = new Promise<void>((resolve) => server?.on('exit', () => resolve()));
+      process.kill(server.pid, 'SIGKILL');
+      await Promise.race([exited, sleep(5000)]);
+      assert.ok(
+        fs.existsSync(path.join(projectDir, '.aboard', 'run', 'instance.json')),
+        'the premise is gone: a dead board now cleans up its own record, so this test proves nothing',
+      );
+
+      // No watcher event can fire from here. Only the dropped stream can, and
+      // recovery is on a throttle, so allow it comfortably.
+      await until('hasBoard to go false after the board died', 25_000, () =>
+        vscode.probe.contexts.get('aboard.hasBoard') === false || undefined,
+      );
+      assert.equal(
+        vscode.probe.contexts.get('aboard.hasProject'),
+        true,
+        'the project is still there — only the board went away',
+      );
+      assert.equal(
+        vscode.probe.rows.filter((r: RenderedRow) => /^ab\d+$/.test(r.description ?? '')).length,
+        0,
+        'a dead board left its tabs in the tree, which also suppresses the welcome view',
+      );
+    } finally {
+      for (const s of subscriptions) {
+        s.dispose();
+      }
+    }
+  });
 });
