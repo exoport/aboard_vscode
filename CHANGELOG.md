@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## v0.1.3 — 2026-08-29
+
+One fix, for a failure that looks like the extension doing nothing: the
+**Start the Board** button goes missing and cannot be got back without reloading
+the window.
+
+- **fix: a board that dies is noticed, so `aboard.hasBoard` stops being stuck
+  true.** Both `viewsWelcome` clauses are gated on `!aboard.hasBoard`, so while
+  that key is wrong there is no button to press — and the tree keeps showing the
+  dead board's tabs, which suppresses the welcome view a second way. A dropped
+  event stream now arms a re-check instead of being logged and discarded.
+  - **Only ungraceful deaths were affected, which is why it was intermittent.**
+    A board that shuts down properly deletes its own `instance.json` (aboard's
+    `server.go`, on a clean return and on Ctrl-C/SIGTERM alike), the file watcher
+    fires `onDidDelete`, and discovery re-runs — that path was always fine. The
+    broken one is a board that never reaches that code: SIGKILL, a crash, an OOM,
+    a suspended machine, a parent terminal taken out from under it. The record
+    survives verbatim, so no filesystem event exists to notice, and the stream
+    drop was the only signal left.
+  - **A throttle, not a debounce**, and the distinction is the correctness of it.
+    A dead board drops its stream, the client retries, the retry drops too — the
+    signal repeats indefinitely. A debounce pushes its deadline out on every one
+    and can starve forever, which is the very failure being fixed. An already
+    pending re-check is therefore left alone: the first drop fixes the deadline,
+    every later one is absorbed. Three seconds, so an ordinary reconnect wins and
+    the check costs one `/health` and changes nothing.
+  - **Rejected: deleting the stale record when `verify()` fails.** This is a
+    viewer; removing another tool's runtime file is invasive, and a transient
+    failure would destroy what `aboard status` reads to say *"stale record: … is
+    not answering"*.
+  - Covered by the live integration suite, which SIGKILLs a real board — SIGTERM
+    would delete the record and silently exercise the path that already worked.
+    It asserts the record survives the kill before asserting anything else, so
+    the test cannot quietly stop testing the thing it is named for. Without the
+    fix it times out at 25s; with it, it passes in about 3.
+
 ## v0.1.2 — 2026-08-28
 
 Both changes are to one thing: which command the **Start a board** button runs.

@@ -2,7 +2,7 @@
   "name": "aboard-vscode",
   "displayName": "Aboard Panel",
   "description": "A native sidebar tree of an aboard project's tabs, with the board itself in a webview panel.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "exoport",
   "license": "Apache-2.0",
   "repository": {
@@ -42,7 +42,7 @@
             "Let the board decide: its own .aboard/theme.json and its dark/light switch. The extension sends no colours."
           ],
           "default": "follow",
-          "markdownDescription": "Where the board in the panel gets its colours.\n\nUnder `follow` the extension reads your theme's colours in the panel and posts them to the board, which applies them for this viewer only \u2014 nothing is written to the board's state file, and other people looking at the same board are unaffected. Text colours are sent only when they reach the contrast the board pins its own type to (WCAG AAA, 7:1); when your theme does not, the backgrounds still follow it and the board keeps its own readable text."
+          "markdownDescription": "Where the board in the panel gets its colours.\n\nUnder `follow` the extension reads your theme's colours in the panel and posts them to the board, which applies them for this viewer only — nothing is written to the board's state file, and other people looking at the same board are unaffected. Text colours are sent only when they reach the contrast the board pins its own type to (WCAG AAA, 7:1); when your theme does not, the backgrounds still follow it and the board keeps its own readable text."
         }
       }
     },
@@ -103,7 +103,7 @@
       },
       {
         "command": "aboard.nudgeWaiting",
-        "title": "Nudge: an agent is parked on aboard wait \u2014 click to release it",
+        "title": "Nudge: an agent is parked on aboard wait — click to release it",
         "category": "Aboard",
         "icon": "$(zap)"
       },
