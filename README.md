@@ -10,8 +10,10 @@ none should ever be added; everything it shows comes from the running `aboard` (
 `aboard` grows a sixteenth renderer this extension needs zero changes — if it ever
 does, something here is wrong.
 
-> **Status: released as v0.1.1 on 2026-08-28. Installed from the `.vsix` and in daily
-> use.** It is not published to any marketplace — download the `.vsix` from the GitHub
+> **Status: released as v0.1.2 on 2026-08-28. Installed from the `.vsix` and in daily
+> use.** v0.1.2 changed only which command the Start button runs — it now probes
+> `ape aboard --version` rather than trusting `ape` on `PATH`, and prefers `ape aboard`
+> in a project that has an `_apex/` directory. It is not published to any marketplace — download the `.vsix` from the GitHub
 > Release and `code --install-extension aboard-vscode-<version>.vsix --force`, then reload
 > the window. `npm run install:dev` does the same from a clone and prints the version that
 > landed, which is the line to read when a reinstall appears to change nothing.
@@ -272,18 +274,34 @@ somebody guessed.
 When that finds **nothing running**, the welcome view offers to start one — and it picks
 the command from what is actually on `PATH` rather than guessing:
 
-1. `aboard` on `PATH` → offer **`aboard serve`** in a new terminal. Plain; there is no
+1. `aboard` on `PATH` → **`aboard serve`** in a new terminal. Plain; there is no
    force-restart flag to reach for, and `aboard serve` refuses to start beside this
    project's own board on its own.
-2. Otherwise `ape` on `PATH` → offer **`ape aboard serve`**.
+2. `ape aboard` **available** → **`ape aboard serve`**. Available, not merely on `PATH`:
+   see the capability probe below.
 3. Neither → an **error naming both commands**, never a silent nothing. An empty tree with
    no explanation is the worst version of this, and the human is one install away.
-4. **Both present → prefer `aboard`.** This is a judgement call and it is recorded as one:
-   aboard's own port plan states no preference between the two hosts when both are
-   available. `aboard` wins because it is the dedicated binary and the whole HTTP contract
-   above is written against it; `ape aboard` exists for projects that standardise on `ape`
-   for everything, and is the right answer when it is the one that is there. Change it
-   here and in `src/launch.ts` together, or the comment and the code drift.
+4. **Both usable → the PROJECT decides.** If the folder holds an `_apex/` directory it is
+   an APEX project, whose sessions already run through `ape`, so its board is started with
+   **`ape aboard serve`** and the human keeps one toolchain in the terminal they are
+   looking at. Without `_apex/` there is no reason to reach through ape, so the dedicated
+   binary wins. Both hosts drive the same `.aboard/`, which is what makes this a
+   preference rather than a constraint.
+
+   This reverses an earlier call ("`aboard` always wins when both are present"), made
+   before there was any signal to tell the two kinds of project apart. `_apex/` is that
+   signal. One directory, no walk-up: the board is started *in* this directory, and a
+   rule the human cannot check by looking at the folder they opened surprises them.
+   Change it here and in `src/launch.ts` together, or the comment and the code drift.
+5. **`ape` on `PATH` is not the question — `ape aboard --version` is.** ape only grew the
+   mount in **v0.0.55**, and every ape before that is on `PATH`, is perfectly real, and has
+   no `aboard` subcommand. Offering it anyway produced `unknown command "aboard"` in the
+   terminal and then *"no board answered within 10s"* from the poll — the symptom, and not
+   one word of the cause. So the subcommand is asked once, on the start path only, and
+   exit status alone is the verdict.
+
+The `_apex/` rule breaks a tie; it never conjures a binary. An APEX project on a machine
+whose `ape` predates the mount is offered `aboard serve`, because that is what is there.
 
 After launching either, `/health` is polled for a few seconds rather than assumed
 successful.

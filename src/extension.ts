@@ -18,7 +18,7 @@ import {
   type Edit,
   type Subscription,
 } from './board';
-import { chooseStartCommand, isOnPath } from './launch';
+import { chooseStartCommand, hasApeAboard, isApexProject, isOnPath } from './launch';
 import {
   approveRemoval,
   denyRemoval,
@@ -581,11 +581,9 @@ class Controller implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
-    const choice = chooseStartCommand({ aboard: isOnPath('aboard'), ape: isOnPath('ape') });
-    if (!choice.ok) {
-      void vscode.window.showErrorMessage(choice.message);
-      return;
-    }
+    // The folder is resolved FIRST, because the choice depends on it: an
+    // `_apex/` project prefers `ape aboard`. Asking which binaries exist before
+    // knowing which project would be answering half the question.
     const folders = (vscode.workspace.workspaceFolders ?? []).filter((f) => f.uri.scheme === 'file');
     if (folders.length === 0) {
       void vscode.window.showErrorMessage('Open a folder first: a board belongs to a project directory.');
@@ -596,6 +594,18 @@ class Controller implements vscode.Disposable {
       return;
     }
     const cwd = findProjectRoot(folder.uri.fsPath) ?? folder.uri.fsPath;
+
+    const choice = chooseStartCommand({
+      aboard: isOnPath('aboard'),
+      // Probed, not assumed: an ape older than v0.0.55 is on PATH and has no
+      // `aboard` subcommand at all.
+      apeAboard: isOnPath('ape') && hasApeAboard(),
+      apexProject: isApexProject(cwd),
+    });
+    if (!choice.ok) {
+      void vscode.window.showErrorMessage(choice.message);
+      return;
+    }
     const terminal = vscode.window.createTerminal({ name: 'aboard', cwd });
     terminal.show(true);
     terminal.sendText(choice.display);

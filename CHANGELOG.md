@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## v0.1.2 — 2026-08-28
+
+Both changes are to one thing: which command the **Start a board** button runs.
+Nothing else moved, and a board already running is unaffected either way.
+
+- **fix: `ape` on `PATH` is no longer taken to mean `ape aboard` works.** ape only
+  grew the mount in v0.0.55, and every ape before that is on `PATH`, is perfectly
+  real, and has no `aboard` subcommand. The button offered it anyway, the terminal
+  answered `unknown command "aboard"`, and the poll then reported *"no board
+  answered within 10s"* — the symptom, with not one word of the cause. The
+  subcommand is now asked (`ape aboard --version`), once, on the start path only,
+  and exit status alone is the verdict: the version string belongs to aboard, and
+  parsing it would couple this to a format neither repo promises. Found by
+  checking the extension against a real `ape aboard` board rather than against
+  the code, on a machine whose `ape` was v0.0.52.
+- **feat: when both hosts are usable, the PROJECT decides.** A folder holding an
+  `_apex/` directory is an APEX project, whose sessions already run through `ape`,
+  so its board starts with `ape aboard serve` and the human keeps one toolchain in
+  the terminal they are looking at. Without `_apex/`, the dedicated binary wins.
+  Both hosts drive the same `.aboard/`, which is what makes this a preference
+  rather than a constraint.
+  - This **reverses** v0.1.1's "`aboard` always wins when both are present". That
+    call was made before there was any signal to tell the two kinds of project
+    apart; `_apex/` is that signal.
+  - One directory, **no walk-up**: the board is started *in* this directory, and a
+    rule the human cannot check by looking at the folder they opened surprises
+    them.
+  - The rule breaks a tie; it never conjures a binary. An APEX project on a machine
+    whose `ape` predates the mount is offered `aboard serve`, because that is what
+    is there.
+
+The decision moved after the workspace-folder pick, since it now depends on which
+project is answering. `README.md`, "Starting a board when there is not one",
+carries the whole table.
+
 ## v0.1.1 — 2026-08-28
 
 The first release. A viewer for a running [aboard](https://github.com/exoport/aboard)
