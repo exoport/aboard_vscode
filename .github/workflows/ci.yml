@@ -3,8 +3,9 @@
 # There is no browser here and no editor: everything with a rule worth arguing
 # about lives on the non-`vscode` side of the code so it can be reached without
 # one. What this cannot catch is what the extension's failure mode actually is —
-# silence in a real editor — which is why README.md keeps a hand-verification
-# checklist and why a human installs the .vsix before anything is tagged.
+# silence in a real editor — which is why docs/reference/observed-in-a-real-editor.md
+# keeps a hand-verification log and why a human installs the .vsix before
+# anything is tagged.
 name: CI
 
 on:

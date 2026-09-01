@@ -4,7 +4,8 @@
 // and `extension.ts` are the adapter on top.
 //
 // The contract is `docs/reference/http-api.md` in the aboard repo, summarised in
-// this repo's README. Two facts about it drive most of the code below:
+// this repo's `docs/reference/board-contract.md`. Two facts about it drive most
+// of the code below:
 //   * the compare-and-set token is `rev`, a counter — NOT `updatedAt`, which was
 //     the token on the spike and is a millisecond clock two writes can share;
 //   * an absent `__by` is "unknown", which has agent powers only, so every write

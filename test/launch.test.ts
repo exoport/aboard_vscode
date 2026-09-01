@@ -26,8 +26,8 @@ describe('chooseStartCommand', () => {
 
   describe('when both are usable, the PROJECT decides', () => {
     // Both hosts drive the same .aboard/, so the tie-break is about which
-    // toolchain the project already standardises on. Recorded in README.md,
-    // "Starting a board when there is not one".
+    // toolchain the project already standardises on. Recorded in
+    // `docs/reference/discovery-and-start.md`, "Starting a board".
     it('prefers ape aboard in an _apex project', () => {
       assert.deepEqual(chooseStartCommand({ aboard: true, apeAboard: true, apexProject: true }), APE);
     });

@@ -37,8 +37,9 @@ const APE_ABOARD: StartChoice = { ok: true, command: 'ape', args: ['aboard', 'se
  *
  * That reverses an earlier judgement call ("`aboard` always wins when both are
  * present"), which was made before there was any signal to tell the two kinds
- * of project apart. `_apex/` is that signal. Recorded here and in README.md,
- * "Starting a board when there is not one" — change both or they drift.
+ * of project apart. `_apex/` is that signal. Recorded here and in
+ * `docs/reference/discovery-and-start.md`, "Starting a board" — change both or
+ * they drift.
  *
  * Whichever is preferred, only what is actually THERE is offered: the `_apex/`
  * rule breaks a tie, it never picks a binary the machine does not have.
