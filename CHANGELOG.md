@@ -18,8 +18,11 @@ before.
     be refused and the sidebar click would do nothing. Later changes travel as the
     message, as they always did. A test pins the refusal, so the constraint is written
     down where the next change to `frameSrc()` will meet it.
-  - **Not yet watched in a real host.** The flash was inferred from the code, not
-    measured in the panel; the row is open in `docs/reference/observed-in-a-real-editor.md`.
+  - **Watched in a real host after the tag, on 2026-09-13.** The flash was inferred
+    from the code when this was tagged. The human then installed the `.vsix`: a light
+    editor opens the panel light, and a sidebar click still navigates after a
+    light/dark switch with the panel open. Recorded in
+    `docs/reference/observed-in-a-real-editor.md`.
 - **feat: the `?chrome=` check reads `/capabilities` first.** aboard v0.2.0 declares the
   shell's URL parameters under `embed.params`, so a board that lists `chrome=notabs` is
   believed without fetching its shell. A board that declares nothing — every release
