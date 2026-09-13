@@ -210,6 +210,21 @@ describe('frameSrc', () => {
     );
   });
 
+  // The board's first paint, asked for in the query because the theme message
+  // can only arrive after `load`. Between the chrome parameter and the fragment,
+  // and absent entirely when no theme is given — every string above is unchanged.
+  it('is exactly ?chrome=notabs&theme=<kind>#tab=<id>&r=<n> when a theme is given', () => {
+    assert.equal(
+      frameSrc('http://127.0.0.1:41234/', 'ab13', 7, 'light'),
+      'http://127.0.0.1:41234/?chrome=notabs&theme=light#tab=ab13&r=7',
+    );
+    assert.equal(frameSrc('http://127.0.0.1:41234/', undefined, 0, 'dark'), 'http://127.0.0.1:41234/?chrome=notabs&theme=dark');
+    assert.equal(
+      frameSrc('http://127.0.0.1:41234/?nosse=1', 'ab13', 1, 'light'),
+      'http://127.0.0.1:41234/?nosse=1&chrome=notabs&theme=light#tab=ab13&r=1',
+    );
+  });
+
   it('escapes the tab id rather than pasting it into the fragment', () => {
     assert.equal(frameSrc('http://127.0.0.1:41234/', 'ab 1&r=9', 2), 'http://127.0.0.1:41234/?chrome=notabs#tab=ab%201%26r%3D9&r=2');
   });
@@ -276,16 +291,29 @@ describe('the frameSrc prefix invariant', () => {
   // file no unit test can load, so the invariant is asserted here instead.
   it('every tab src starts with the src the frame was rendered with', () => {
     for (const url of ['http://127.0.0.1:41234/', 'http://127.0.0.1:41234/brd/', 'https://x-41234.app.github.dev/']) {
-      const initial = frameSrc(url, undefined, 0);
-      for (const tab of ['ab1', 'ab71', 'ab999']) {
-        for (const n of [1, 2, 17]) {
-          assert.ok(
-            frameSrc(url, tab, n).startsWith(initial),
-            `${frameSrc(url, tab, n)} does not start with ${initial}`,
-          );
+      for (const theme of [undefined, 'dark', 'light'] as const) {
+        const initial = frameSrc(url, undefined, 0, theme);
+        for (const tab of ['ab1', 'ab71', 'ab999']) {
+          for (const n of [1, 2, 17]) {
+            assert.ok(
+              frameSrc(url, tab, n, theme).startsWith(initial),
+              `${frameSrc(url, tab, n, theme)} does not start with ${initial}`,
+            );
+          }
         }
       }
     }
+  });
+
+  // Why `src/panel.ts` fixes the theme for the panel's lifetime rather than
+  // re-reading it on every goto. The query is inside the pinned prefix, so a
+  // tab src built after the editor switched theme is one panel.html refuses —
+  // not a reload, a sidebar click that does nothing.
+  it('does NOT hold across a change of theme, which is why the panel never changes it', () => {
+    const url = 'http://127.0.0.1:41234/';
+    assert.equal(frameSrc(url, 'ab1', 1, 'dark').startsWith(frameSrc(url, undefined, 0, 'light')), false);
+    assert.equal(frameSrc(url, 'ab1', 1, 'light').startsWith(frameSrc(url, undefined, 0, 'dark')), false);
+    assert.equal(frameSrc(url, 'ab1', 1).startsWith(frameSrc(url, undefined, 0, 'light')), false);
   });
 
   it('and panel.html actually performs that check', () => {

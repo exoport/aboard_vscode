@@ -11,7 +11,7 @@ import type { Board } from './board';
 import { copyImageToClipboard } from './clipboard';
 import { frameSrc } from './model';
 import { parseWebviewMessage } from './messages';
-import { mapVscodeTheme, themeKindFromBodyClass, VSCODE_VARS } from './theme';
+import { firstPaintKind, mapVscodeTheme, themeKindFromBodyClass, VSCODE_VARS, type BoardThemeKind } from './theme';
 
 /**
  * What `aboard.theme` says to do.
@@ -58,6 +58,18 @@ export class BoardPanel {
     private readonly board: Board,
     private readonly boardUrl: string,
     private themeMode: ThemeMode,
+    /**
+     * The `?theme=` every frame src carries, fixed when the panel is created.
+     *
+     * Fixed, not re-read on each `goto`: the query is part of the src prefix
+     * `media/panel.html` pins, so a src built after the editor switched theme
+     * would be REFUSED there, and the sidebar click would do nothing. Later
+     * changes travel as the theme message, as they always did. Two edges follow
+     * and are accepted: a board that reloads itself after a light/dark switch
+     * paints the old variant until the load-time message corrects it, and one
+     * reloaded after `aboard.theme` went to `board` still carries the parameter.
+     */
+    private readonly firstPaint: BoardThemeKind | undefined,
     private readonly onActive: (tab: string) => void,
     private readonly onDispose: () => void,
     private readonly log: (line: string) => void,
@@ -149,8 +161,9 @@ export class BoardPanel {
     const external = await vscode.env.asExternalUri(vscode.Uri.parse(board.boardUrl));
     const boardUrl = external.toString();
     panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'activity.svg');
+    const firstPaint = firstPaintKind(handlers.themeMode, vscode.window.activeColorTheme.kind);
     const created = new BoardPanel(
-      panel, board, boardUrl, handlers.themeMode, handlers.onActive, handlers.onDispose, handlers.log,
+      panel, board, boardUrl, handlers.themeMode, firstPaint, handlers.onActive, handlers.onDispose, handlers.log,
     );
     created.render(extensionUri);
     return created;
@@ -184,7 +197,7 @@ export class BoardPanel {
       // live in src/theme.ts beside the mapping that consumes them rather than
       // being a second list in a file no test imports.
       .replace('__VARS__', JSON.stringify(VSCODE_VARS))
-      .replace('__SRC__', frameSrc(this.boardUrl, undefined, 0));
+      .replace('__SRC__', frameSrc(this.boardUrl, undefined, 0, this.firstPaint));
     this.panel.webview.html = html;
   }
 
@@ -241,7 +254,7 @@ export class BoardPanel {
     await this.panel.webview.postMessage({
       type: 'goto',
       tab: tabId,
-      src: frameSrc(this.boardUrl, tabId, this.nonceCounter),
+      src: frameSrc(this.boardUrl, tabId, this.nonceCounter, this.firstPaint),
     });
   }
 

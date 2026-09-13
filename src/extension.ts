@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import {
   Board,
   BoardError,
+  declaresChrome,
   findAllInstances,
   findProjectRoot,
   verify,
@@ -349,7 +350,10 @@ class Controller implements vscode.Disposable {
       return;
     }
     this.chromeProbe.set(key, 'busy');
-    const supported = await board.supportsChrome();
+    // The manifest first: from aboard v0.2.0 it declares the shell's parameters,
+    // and `reload()` has already fetched it. Only a board that declares nothing
+    // costs the GET of its whole shell. See shellSupportsChrome.
+    const supported = declaresChrome(this.caps.get(key)) ?? (await board.supportsChrome());
     if (this.disposed) {
       return;
     }

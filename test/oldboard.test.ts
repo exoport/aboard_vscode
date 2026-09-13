@@ -54,6 +54,9 @@ let projectDir = '';
 let server: http.Server;
 let port = 0;
 let shell = OLD_SHELL;
+/** The manifest as every board before v0.2.0 answered it: nothing about the shell. */
+const OLD_CAPS = { app: 'aboard', schema: 3, capsHash: 'old', types: [{ type: 'dag', label: 'Plan' }] };
+let caps: Record<string, unknown> = OLD_CAPS;
 /** How long `GET /` takes to answer. Non-zero widens the in-flight window. */
 let shellDelay = 0;
 /** Every `GET /` this stub has served, so a test can count probes as well as warnings. */
@@ -86,7 +89,7 @@ before(async () => {
       return json(DOC);
     }
     if (url === '/capabilities') {
-      return json({ app: 'aboard', schema: 3, capsHash: 'old', types: [{ type: 'dag', label: 'Plan' }] });
+      return json(caps);
     }
     if (url === '/waiters') {
       return json({ waiting: 0 });
@@ -238,6 +241,30 @@ describe('a board older than the ?chrome= contract', { timeout: 30_000 }, () => 
         [],
       );
     } finally {
+      dispose();
+    }
+  });
+
+  // From aboard v0.2.0 the manifest declares the shell's parameters, and the
+  // extension believes it. The shell here is deliberately the OLD one, so the
+  // only way this test passes is if the declaration decided and the page was
+  // never fetched — a probe that still ran would warn.
+  it('takes a declaring manifest at its word, and never fetches the shell', async () => {
+    shell = OLD_SHELL;
+    caps = {
+      ...OLD_CAPS,
+      embed: { channels: ['frame', 'top'], params: [{ name: 'chrome', values: ['full', 'notabs', 'none'] }] },
+    };
+    const { vscode, dispose } = await run();
+    try {
+      await sleep(1500);
+      assert.deepEqual(
+        vscode.probe.notifications.filter((n) => /chrome|tab strip/.test(n.message)),
+        [],
+      );
+      assert.equal(shellHits, 0, `a declaring board's shell should not be fetched, but it was ${shellHits} times`);
+    } finally {
+      caps = OLD_CAPS;
       dispose();
     }
   });

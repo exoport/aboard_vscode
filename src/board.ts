@@ -87,6 +87,12 @@ export interface Capabilities {
   schema?: number;
   capsHash?: string;
   types?: Array<{ type: string; label?: string; blurb?: string }>;
+  /**
+   * What a host may ask of the shell: its channels, URL parameters and messages.
+   * Since aboard v0.2.0, and absent on every board before it — which is why
+   * `declaresChrome` has a third answer.
+   */
+  embed?: { channels?: string[]; params?: Array<{ name?: string; values?: string[] }> };
 }
 
 export interface Waiters {
@@ -319,21 +325,47 @@ export function basePathOf(instance: Instance): string {
  * so the human gets two tab lists stacked on top of each other and nothing
  * anywhere says why. The first real run of this extension hit exactly that.
  *
- * **There is no field in `/capabilities` to test.** The manifest carries `app`,
- * `schema`, `capsHash`, `types`, `commands`, `rootFlags` and `routes`, and none
- * of them mentions the shell's query parameters; `capsHash` moved when `?chrome=`
- * landed but a hash is opaque, so a client cannot tell "different" from "older".
- * `/health.version` is `git describe --tags --always --dirty`, which on an
- * untagged tree is a commit hash — also unordered. So the honest probe is to ask
- * the shell itself: it stamps `document.body.dataset.chrome` in a classic script
- * at the top of `<body>`, and that line is the feature. Testing the feature beats
- * testing a proxy for it.
+ * **Ask the manifest first; `declaresChrome` below.** Since aboard v0.2.0,
+ * `/capabilities` carries `embed.params`, the shell's URL parameters and their
+ * values, declared in Go and checked against the shell by that repository's own
+ * tests. That is a declaration a client can read, and it costs nothing: the
+ * manifest is already fetched for the tooltips.
  *
- * Returns `undefined` when the shell could not be read at all — silence is right
- * there, because a false alarm about the board's age is worse than no alarm.
+ * **The shell is read only when the manifest is silent**, which is every board
+ * before v0.2.0. Their manifests carry `app`, `schema`, `capsHash`, `types`,
+ * `commands`, `rootFlags` and `routes`, and none of them mentions the shell's
+ * query parameters; `capsHash` moved when `?chrome=` landed but a hash is
+ * opaque, so a client cannot tell "different" from "older". `/health.version` is
+ * `git describe --tags --always --dirty`, which on an untagged tree is a commit
+ * hash — also unordered. So for those the honest probe is the shell itself: it
+ * stamps `document.body.dataset.chrome` in a classic script at the top of
+ * `<body>`, and that line is the feature. This fallback goes when boards older
+ * than v0.2.0 stop being worth supporting, and not before.
+ *
+ * `Board.supportsChrome` returns `undefined` when the shell could not be read at
+ * all — silence is right there, because a false alarm about the board's age is
+ * worse than no alarm.
  */
 export function shellSupportsChrome(html: string): boolean {
   return /dataset\s*\.\s*chrome\b/.test(html) || /\bdata-chrome\b/.test(html);
+}
+
+/**
+ * What the manifest DECLARES about `?chrome=notabs`, when it declares anything.
+ *
+ * `true` or `false` when `embed.params` is present — the board has said which
+ * parameters it reads, so a `chrome` without `notabs`, or no `chrome` at all,
+ * is a real no. `undefined` when there is no `embed.params` to read: a board
+ * older than v0.2.0, which says nothing either way, so the caller falls back to
+ * reading the shell.
+ */
+export function declaresChrome(caps: Capabilities | undefined): boolean | undefined {
+  const params = caps?.embed?.params;
+  if (!Array.isArray(params)) {
+    return undefined;
+  }
+  const chrome = params.find((p) => p?.name === 'chrome');
+  return Array.isArray(chrome?.values) && chrome.values.includes('notabs');
 }
 
 /* ------------------------------------------------------------------- client */

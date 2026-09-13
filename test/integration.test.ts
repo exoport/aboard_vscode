@@ -294,6 +294,23 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
     assert.equal(await board.supportsChrome(), true);
   });
 
+  // `declaresChrome` reads a copy of the shape aboard declares in
+  // pkg/aboard/embed.go, so the copy is checked against a real `/capabilities`
+  // rather than trusted. A binary older than v0.2.0 declares nothing — the
+  // `aboard` on a PATH may well be one — and then the answer must be "unknown",
+  // so the shell probe above is what decides.
+  it('reads the binary’s own ?chrome= declaration, when it makes one', async () => {
+    const { declaresChrome, findAllInstances, verify } = require('../src/board') as typeof import('../src/board');
+    const { board } = await verify(findAllInstances([projectDir])[0]!);
+    assert.ok(board);
+    const caps = await board.capabilities();
+    if (caps.embed === undefined) {
+      assert.equal(declaresChrome(caps), undefined);
+      return;
+    }
+    assert.equal(declaresChrome(caps), true, `the manifest declares embed but not chrome=notabs: ${JSON.stringify(caps.embed)}`);
+  });
+
   it('puts a dot on the row, through the whole vscode chain', async () => {
     const vscode = require('./vscode-stub') as typeof import('./vscode-stub');
     const { activate } = require('../src/extension') as typeof import('../src/extension');

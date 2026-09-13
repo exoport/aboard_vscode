@@ -58,6 +58,18 @@ Periwinkle means an agent said it and orange means the human asked for it, in th
 exactly as in a browser tab, because those are sentences the board's own docs teach every
 agent.
 
+## "The panel opens dark for a moment, then turns light"
+
+That is a board older than **aboard v0.2.0**. The extension asks for your editor's
+variant in the frame's URL (`&theme=light`) so the board paints it from the first frame,
+and an older board ignores the parameter — so it paints its default dark and waits for the
+colours to arrive after the page has loaded. Update the aboard binary and restart the
+board.
+
+On a current board you may still see a much smaller step as the panel opens: the board's
+own light ground giving way to your editor's. That is the rest of the palette arriving,
+which can only happen after load. See [the first frame](../reference/theme.md#the-first-frame).
+
 ## "I changed theme and the panel kept the old colours"
 
 It should not: the mapping re-reads on four separate signals, including a

@@ -57,7 +57,7 @@ are listed as openly as the ones that passed.
 - [Commands and settings](reference/commands-and-settings.md) — every contributed command, menu, context key and setting, as a table
 - [The board contract](reference/board-contract.md) — every call this extension makes, and the four facts the design rests on
 - [Discovery and starting a board](reference/discovery-and-start.md) — the walk up, the `/health` check, and the ladder that picks a start command
-- [Theme mapping](reference/theme.md) — the three hops, the 21 tokens, the derived depth ramp and the contrast guard
+- [Theme mapping](reference/theme.md) — the three hops, the first frame, the 21 tokens, the derived depth ramp and the contrast guard
 - [Repository layout](reference/layout.md) — what each file is for, and where the `vscode` import stops
 - [Observed in a real editor](reference/observed-in-a-real-editor.md) — the verification log: what was watched, when, and what is still open
 - [Edge cases and their status](reference/edge-cases.md) — the list that must be true before any public listing
@@ -67,7 +67,7 @@ are listed as openly as the ones that passed.
 - [What this extension is](explanation/what-this-extension-is.md) — a viewer, three hard rules, and why it is a separate repository
 - [The failure mode is silence](explanation/the-failure-mode-is-silence.md) — every defect of consequence, how each was found, and why no test saw any of them
 - [Why a native TreeView](explanation/why-a-native-treeview.md) — what a webview sidebar would have cost, and the one price paid instead
-- [Why the shell is probed](explanation/why-the-shell-is-probed.md) — `?chrome=notabs`, and why `/capabilities` cannot answer for it
+- [Why the shell is probed](explanation/why-the-shell-is-probed.md) — `?chrome=notabs`, read from `/capabilities` when the board declares it and from the shell when it does not
 - [Why the project picks the start command](explanation/why-the-project-picks-the-start-command.md) — `_apex/` as the tiebreak, and the earlier call it reverses
 - [Why the host copies images](explanation/why-the-host-copies-images.md) — a webview cannot reach the clipboard and never will
 - [Why the theme splits neutrals from voices](explanation/why-the-theme-splits-neutrals-from-voices.md) — depth is an order, the voices are a set, and a host theme guarantees neither

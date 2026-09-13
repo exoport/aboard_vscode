@@ -16,6 +16,24 @@ The first hop is the reason there are three.
 2. **`src/theme.ts` maps** them onto the board's tokens. It is a pure function with no `vscode` import, which is the whole reason the page hands its values out instead of mapping them itself — `media/panel.html` stays a bridge and learns no palette, and every rule below is reachable from `node --test`.
 3. **The page posts `{__aboard: 'theme', kind, tokens}` into the frame**, and the board applies them as inline custom properties for that viewer only. Nothing is written: not the board document, not `localStorage`. Two people can look at one board in the same second and disagree about colour while agreeing about content.
 
+## The first frame
+
+The third hop can only happen once the frame has fired `load`, and a document paints long
+before that. So a board inside a light editor used to come up in its default dark variant
+and turn light a moment later.
+
+**The frame's URL carries `&theme=dark|light`** as well, and aboard v0.2.0 reads it in
+the classic script that stamps the variant before first paint — ahead of the viewer's
+stored choice and the project's `theme.json` default, and written nowhere. The kind comes
+from `vscode.window.activeColorTheme.kind` on the host (high contrast to its own side,
+exactly as the body class maps), because that is the one theme fact the host has before
+the page exists. The logic is `firstPaintKind` in `src/theme.ts`.
+
+- **Only under `follow`.** The parameter outranks the viewer's own dark/light choice, and `board` exists to stop the extension overruling that.
+- **It picks the variant, not the palette.** The editor's neutrals still arrive with the message at `load`, so what is left is the step from the board's own light ground to the editor's — not dark to light.
+- **It is fixed when the panel opens.** The query is part of the src prefix `media/panel.html` pins for `goto`, so a src built after a theme change would be refused and the sidebar click would do nothing. A theme change after that travels as the message, as it always did. Two edges follow and are accepted: a board that reloads its own code after a light/dark switch paints the old variant until the message corrects it, and one that reloads after `aboard.theme` went to `board` still carries the parameter.
+- **An older board ignores it**, because an unknown query parameter is not an error, and flashes exactly as it did before.
+
 ## The 21 tokens
 
 The names live in `src/theme.ts` so that a name the board does not have cannot be

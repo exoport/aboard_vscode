@@ -15,6 +15,7 @@ import {
   boardKind,
   contrast,
   depthRamp,
+  firstPaintKind,
   mapVscodeTheme,
   parseColor,
   themeKindFromBodyClass,
@@ -103,6 +104,29 @@ describe('themeKindFromBodyClass', () => {
   it('falls back to dark, which is the board’s own default', () => {
     assert.equal(themeKindFromBodyClass(''), 'dark');
     assert.equal(themeKindFromBodyClass('some-other-class'), 'dark');
+  });
+});
+
+describe('firstPaintKind', () => {
+  it('maps the host’s ColorThemeKind by value, high contrast to its own side', () => {
+    // Light = 1, Dark = 2, HighContrast = 3, HighContrastLight = 4 — the same
+    // split themeKindFromBodyClass makes, from the one fact the host has before
+    // the page exists.
+    assert.equal(firstPaintKind('follow', 1), 'light');
+    assert.equal(firstPaintKind('follow', 2), 'dark');
+    assert.equal(firstPaintKind('follow', 3), 'dark');
+    assert.equal(firstPaintKind('follow', 4), 'light');
+  });
+
+  it('falls back to dark for a kind it does not know, which is the board’s own default', () => {
+    assert.equal(firstPaintKind('follow', 0), 'dark');
+    assert.equal(firstPaintKind('follow', 99), 'dark');
+  });
+
+  it('asks for nothing under `board`, because the parameter would outrank the viewer’s own choice', () => {
+    for (const kind of [1, 2, 3, 4]) {
+      assert.equal(firstPaintKind('board', kind), undefined);
+    }
   });
 });
 

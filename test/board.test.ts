@@ -7,7 +7,7 @@ import * as assert from 'node:assert/strict';
 import * as http from 'node:http';
 import { afterEach, describe, it } from 'node:test';
 
-import { Board, describeWriteFailure, shellSupportsChrome, type Doc, type Instance } from '../src/board';
+import { Board, declaresChrome, describeWriteFailure, shellSupportsChrome, type Doc, type Instance } from '../src/board';
 
 interface Stub {
   server: http.Server;
@@ -361,14 +361,46 @@ describe('a request that is cut off', () => {
   });
 });
 
+describe('the ?chrome= declaration', () => {
+  // From aboard v0.2.0 the manifest says which URL parameters the shell reads, so
+  // the extension asks it before fetching a whole page. The shape is aboard's
+  // `declaredEmbed` in pkg/aboard/embed.go.
+  const v020 = {
+    app: 'aboard',
+    embed: {
+      channels: ['frame', 'top'],
+      params: [
+        { name: 'chrome', values: ['full', 'notabs', 'none'] },
+        { name: 'embed', values: ['top'] },
+        { name: 'theme', values: ['dark', 'light'] },
+      ],
+    },
+  };
+
+  it('says yes when the manifest declares chrome=notabs', () => {
+    assert.equal(declaresChrome(v020), true);
+  });
+
+  it('says no when the manifest declares its parameters and notabs is not among them', () => {
+    assert.equal(declaresChrome({ embed: { params: [{ name: 'chrome', values: ['full'] }] } }), false);
+    assert.equal(declaresChrome({ embed: { params: [{ name: 'theme', values: ['dark', 'light'] }] } }), false);
+  });
+
+  it('says nothing for a manifest older than the declaration, so the shell is read instead', () => {
+    assert.equal(declaresChrome({ app: 'aboard', schema: 1, capsHash: 'old', types: [] }), undefined);
+    assert.equal(declaresChrome({ embed: {} }), undefined);
+    assert.equal(declaresChrome(undefined), undefined);
+  });
+});
+
 describe('the ?chrome= probe', () => {
-  // There is no field in `/capabilities` that says whether the shell understands
-  // `?chrome=` — the manifest carries app, schema, capsHash, types, commands,
-  // rootFlags and routes, and none of them describes the shell's query
-  // parameters. `capsHash` moves whenever any spec moves, so it can say
-  // "different" but never "older", and `/health.version` is `git describe`, which
-  // on an untagged tree is a commit hash and does not order either. So the probe
-  // reads the shell and looks for the line that IS the feature.
+  // The fallback, for a board older than v0.2.0 whose manifest declares nothing
+  // about the shell: app, schema, capsHash, types, commands, rootFlags and
+  // routes, and none of them describes the shell's query parameters. `capsHash`
+  // moves whenever any spec moves, so it can say "different" but never "older",
+  // and `/health.version` is `git describe`, which on an untagged tree is a
+  // commit hash and does not order either. So the probe reads the shell and
+  // looks for the line that IS the feature.
 
   it('recognises a shell that stamps the chrome attribute', () => {
     const modern = `<body>\n<script>document.body.dataset.chrome = ['full','notabs','none'].indexOf(want) >= 0 ? want : 'full';</script>`;

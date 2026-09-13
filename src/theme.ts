@@ -413,6 +413,33 @@ export function boardKind(kind: VscodeThemeKind): BoardThemeKind {
 }
 
 /**
+ * The variant to ask the board for in the frame's URL, so it paints right from its first frame.
+ *
+ * **Why the URL at all.** The `{__aboard: 'theme'}` message can only be posted
+ * once the frame has fired `load`, and a document paints long before that — so
+ * a board inside a light editor came up dark and turned light a moment later.
+ * aboard v0.2.0 reads `?theme=dark|light` in the classic script that stamps its
+ * variant before first paint, ahead of the viewer's stored choice and the
+ * project's `theme.json` default, and writes it nowhere. An older board ignores
+ * the parameter, because an unknown query parameter is not an error.
+ *
+ * **Only under `follow`.** The parameter outranks the viewer's own choice, and
+ * `board` exists precisely so the extension stops overruling that.
+ *
+ * Takes the host's `ColorThemeKind` by VALUE — `Light = 1`, `Dark = 2`,
+ * `HighContrast = 3`, `HighContrastLight = 4` — because this file does not
+ * import `vscode`. This is the one theme fact the extension host has without
+ * asking the page, which is what lets it go into the URL before the page
+ * exists. Anything unrecognised is `dark`, which is the board's own default.
+ */
+export function firstPaintKind(mode: 'follow' | 'board', colorThemeKind: number): BoardThemeKind | undefined {
+  if (mode !== 'follow') {
+    return undefined;
+  }
+  return colorThemeKind === 1 || colorThemeKind === 4 ? 'light' : 'dark';
+}
+
+/**
  * The VS Code theme, as the board's palette.
  *
  * Four refusals, and each one is the point of the function:

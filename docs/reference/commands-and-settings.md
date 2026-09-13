@@ -86,7 +86,7 @@ is how a board started *after* the window was open ever shows up.
 |---|---|---|
 | `aboard.theme` | `"follow"` \| `"board"` | `"follow"` |
 
-- **`follow`** — derive the board's palette from your VS Code theme's colours and hand it to the board, so the panel belongs in the window. Applied for that viewer only; nothing is written to the board's state file, and other people looking at the same board are unaffected. Text colours are sent only when they reach the contrast the board pins its own type to (WCAG AAA, 7:1); when your theme does not, the backgrounds still follow it and the board keeps its own readable text.
+- **`follow`** — derive the board's palette from your VS Code theme's colours and hand it to the board, so the panel belongs in the window. Applied for that viewer only; nothing is written to the board's state file, and other people looking at the same board are unaffected. Text colours are sent only when they reach the contrast the board pins its own type to (WCAG AAA, 7:1); when your theme does not, the backgrounds still follow it and the board keeps its own readable text. The panel also asks the board to open in your editor's dark or light variant from its first frame (aboard v0.2.0 and later).
 - **`board`** — the extension sends no colours at all, and the board's own `.aboard/theme.json` and dark/light switch decide. The right setting for someone who deliberately keeps the board in the other variant from their editor.
 
 Full rules in [theme mapping](theme.md); the practical version is [how to make the board

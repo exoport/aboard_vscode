@@ -17,9 +17,9 @@ as this one.
 | `GET /health` | liveness; `version` for the status bar; `project`, compared against the discovered root (a stale instance file from a dead server is otherwise indistinguishable from a live one); `app`, which is `aboard` or `ape-aboard`; `base`, the URL prefix when the server was started with `--base-path`. |
 | `GET /aboard.json` | the tree: per tab `id`, `name`, `type`, `note`, `touched{by,at,note}`, `pendingRemoval{by,reason}`. |
 | `GET /events` (SSE) | live refresh. Three frame kinds on one stream, told apart by key: `origin` → the state changed; `waiters` → the notify count changed; `ui` → the *page's* own code changed, which the board handles itself and **this extension ignores entirely**. |
-| `GET /capabilities` | `{type, label, blurb, …}` per renderer, for tooltips, and `schema` for noticing drift — so no type label and no schema number is hardcoded here. |
+| `GET /capabilities` | `{type, label, blurb, …}` per renderer, for tooltips, and `schema` for noticing drift — so no type label and no schema number is hardcoded here. From aboard v0.2.0, `embed.params` too: the shell's URL parameters and their values, which is how this extension learns that `?chrome=notabs` is understood. |
 | `POST /aboard.json` | writes: the whole document plus `__base`, `__by: "human"`, `__origin: "vscode"`. `409` → re-read, redo the edit, retry **once**, then tell the human. |
-| `GET /` | the shell the panel frames — and, read once per board, the probe for whether this binary understands `?chrome=` (it stamps `document.body.dataset.chrome`). The manifest has no field for it; see [why the shell is probed](../explanation/why-the-shell-is-probed.md). |
+| `GET /` | the shell the panel frames — and, for a board older than v0.2.0 whose manifest declares nothing about the shell, read once per board as the probe for whether this binary understands `?chrome=` (it stamps `document.body.dataset.chrome`). See [why the shell is probed](../explanation/why-the-shell-is-probed.md). |
 | `POST /poke` · `GET /waiters` | the nudge channel: the view-title button, a status-bar item and a command. `/waiters` is read on every reload as well as followed on the stream, because the `waiters` frame is only sent when the count CHANGES — a session that parked before the window opened is invisible to the frame alone. |
 | `#tab=<id>` on the board URL | navigation, and "copy link to this tab". |
 
@@ -37,11 +37,13 @@ as this one.
 ## The URL the panel frames
 
 ```
-<base>?chrome=notabs#tab=<id>&r=<n>
+<base>?chrome=notabs&theme=<dark|light>#tab=<id>&r=<n>
 ```
 
 Asserted as a whole string in the tests. `?chrome=notabs` suppresses the board's own tab
-strip for that viewer; `r=<n>` is a counter that changes on every navigation.
+strip for that viewer; `&theme=` is the variant to paint from the first frame, sent only
+under `aboard.theme: follow` and fixed for the panel's lifetime (see [the first
+frame](theme.md#the-first-frame)); `r=<n>` is a counter that changes on every navigation.
 
 ## Four facts the design rests on
 
@@ -76,9 +78,17 @@ each was free to send and would only ever have cost a change here later.
 - **`{__aboard: 'active', tab}`** — the board announces its own tab switches, so the sidebar highlight follows keys pressed inside the panel and not only clicks that started in the tree. `media/panel.html` has always listened for it.
 
 **An older board silently ignores the first of these**, because an unknown query
-parameter is not an error. This extension probes for it and says so, once per board, in a
+parameter is not an error. This extension checks for it and says so, once per board, in a
 warning that names the board and its version — see [why the shell is
 probed](../explanation/why-the-shell-is-probed.md).
+
+## Two more from aboard v0.2.0 — both taken
+
+- **`?theme=dark|light`** — the variant the board paints from its first frame, ahead of the viewer's stored choice and the project default, written nowhere. The theme message can only arrive after `load`, so without it a light editor showed the board dark for a moment. `frameSrc()` sends it under `follow`; see [the first frame](theme.md#the-first-frame).
+- **`embed` in `/capabilities`** — the shell's channels, URL parameters and messages, declared. The `?chrome=` check reads `embed.params` first and fetches the shell only for a board that declares nothing.
+
+An older board ignores the parameter and has no `embed` field; both degrade to exactly
+what happened before.
 
 ## See also
 

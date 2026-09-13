@@ -5,6 +5,7 @@
 // writes), and `tree.ts` is a thin translation of it into TreeItems.
 
 import type { Capabilities, Doc, Edit, TabDoc } from './board';
+import type { BoardThemeKind } from './theme';
 
 export type DotKind = 'change' | 'removal' | undefined;
 
@@ -187,9 +188,17 @@ export function referenceText(name: string | undefined, tabId: string): string {
  * the URL was always right — but `Board.supportsChrome()` now probes for it and
  * the human gets one sentence instead of a mystery.
  *
- * The exact shape is `<base>?chrome=notabs#tab=<id>&r=<n>` and it is asserted as
- * a whole string in test/model.test.ts, because "is this URL wrong?" was the
- * first question that run raised and there was nothing to answer it with.
+ * The exact shape is `<base>?chrome=notabs&theme=<kind>#tab=<id>&r=<n>` and it is
+ * asserted as a whole string in test/model.test.ts, because "is this URL wrong?"
+ * was the first question that run raised and there was nothing to answer it with.
+ *
+ * `&theme=` rides along only when `theme` is given — see `firstPaintKind` in
+ * `src/theme.ts` for what it does and when it is sent. **The caller must pass
+ * the SAME value for the life of a panel.** The query is part of the prefix
+ * below, so a `goto` built with a different theme would not merely reload the
+ * board and lose its in-page state: `media/panel.html` would refuse it, and the
+ * sidebar click would do nothing. A theme change after the panel opens travels
+ * as the `{__aboard: 'theme'}` message, which is what it always did.
  *
  * Every value this returns starts with the no-tab form, and `media/panel.html`
  * relies on that: it accepts a `goto` only for a src beginning with the one the
@@ -201,10 +210,10 @@ export function referenceText(name: string | undefined, tabId: string): string {
  * while the page shows something else — and setting a fragment to the value it
  * already has fires no `hashchange`, so the click would do nothing.
  */
-export function frameSrc(boardUrl: string, tabId: string | undefined, nonce: number): string {
+export function frameSrc(boardUrl: string, tabId: string | undefined, nonce: number, theme?: BoardThemeKind): string {
   const base = boardUrl.replace(/#.*$/, '');
   const sep = base.includes('?') ? '&' : '?';
-  const url = `${base}${sep}chrome=notabs`;
+  const url = `${base}${sep}chrome=notabs${theme ? `&theme=${theme}` : ''}`;
   return tabId ? `${url}#tab=${encodeURIComponent(tabId)}&r=${nonce}` : url;
 }
 
