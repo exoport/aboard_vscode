@@ -80,6 +80,12 @@ If it happens, reopen the panel and file it — that is a real defect, and the r
 sit under in [the verification log](../reference/observed-in-a-real-editor.md) is one a
 human has watched pass.
 
+**One exception with a known cause:** the panel flips back to the other variant the moment
+someone edits the project's `.aboard/theme.json`. That is a board older than **aboard
+v0.2.1**, which forgot the variant your editor last sent and re-decided it from the one
+the panel opened with. Update the aboard binary and restart the board; until then,
+switching your editor theme once more puts it right.
+
 ## See also
 
 - [Theme mapping](../reference/theme.md) — the tokens, the ramp, the guard, and who may set the palette.

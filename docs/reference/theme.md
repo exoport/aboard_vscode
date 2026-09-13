@@ -126,6 +126,15 @@ host → renderer → page while the new properties travel theme service → pag
 orders the two. A notice that overtakes them reads the old theme, and the panel would
 keep the previous colours until something unrelated moved.
 
+One change the panel is deliberately **not** told about: an edit to the project's
+`.aboard/theme.json`. The board applies it over SSE without reloading, so no `load` fires
+and nothing is re-sent — and from **aboard v0.2.1** nothing needs to be, because the board
+remembers the `kind` of the last theme message as the host's word, ahead of `?theme=`.
+On **v0.2.0 and older** it did not: the edit re-decided the variant from the load-time
+`?theme=` (or the viewer's stored choice), so a panel whose editor had switched between
+light and dark since it opened flipped back to the variant it opened with, and stayed
+there until the next editor theme change.
+
 ## Who may set the palette
 
 **Only the host.** The board's `html` tabs are frames inside the frame and can reach

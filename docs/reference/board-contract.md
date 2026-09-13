@@ -90,6 +90,11 @@ probed](../explanation/why-the-shell-is-probed.md).
 An older board ignores the parameter and has no `embed` field; both degrade to exactly
 what happened before.
 
+**aboard v0.2.1 changed no part of this contract** (`capsHash` stayed `8beefdfe`) and fixed
+one behaviour behind it: the board now remembers the `kind` of the last theme message, so
+an edit to `.aboard/theme.json` no longer throws the panel back to the variant in its
+`?theme=`. See [theme mapping](theme.md#when-it-re-reads).
+
 ## See also
 
 - [What it does](what-it-does.md) — the surfaces these calls feed.
