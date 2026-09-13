@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## v0.2.0 — 2026-09-13
+
+Two follow-ups for aboard v0.2.0, and numbered to match it. Nothing here is a fix, and nothing breaks against an
+older board: it ignores the parameter, has no `embed` field, and behaves exactly as
+before.
+
+- **feat: the panel opens in the editor's variant from the first frame.** The theme
+  message can only be posted after the frame's `load`, and a document paints long
+  before that, so a light editor showed the board dark for a moment first. The frame's
+  URL now carries `&theme=dark|light`, read from `activeColorTheme.kind` when the panel
+  is created, and aboard v0.2.0 stamps it before first paint. Only under
+  `aboard.theme: follow`, because the parameter outranks the viewer's own choice.
+  - **Fixed for the panel's lifetime, and it has to be.** The query sits inside the src
+    prefix `media/panel.html` pins for `goto`, so re-reading the theme on each
+    navigation would not merely reload the board after a theme change — the goto would
+    be refused and the sidebar click would do nothing. Later changes travel as the
+    message, as they always did. A test pins the refusal, so the constraint is written
+    down where the next change to `frameSrc()` will meet it.
+  - **Not yet watched in a real host.** The flash was inferred from the code, not
+    measured in the panel; the row is open in `docs/reference/observed-in-a-real-editor.md`.
+- **feat: the `?chrome=` check reads `/capabilities` first.** aboard v0.2.0 declares the
+  shell's URL parameters under `embed.params`, so a board that lists `chrome=notabs` is
+  believed without fetching its shell. A board that declares nothing — every release
+  before v0.2.0 — still gets the shell probe, which is why `shellSupportsChrome` stays.
+  Absent and "no" are kept apart: a manifest that lists its parameters without
+  `notabs` has said no. The integration suite checks the copied shape against a real
+  binary's manifest, and passes against both a v0.1.3 and a v0.2.0 one.
+
 ## v0.1.3 — 2026-08-29
 
 One fix, for a failure that looks like the extension doing nothing: the

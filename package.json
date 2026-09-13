@@ -2,7 +2,7 @@
   "name": "aboard-vscode",
   "displayName": "Aboard Panel",
   "description": "A native sidebar tree of an aboard project's tabs, with the board itself in a webview panel.",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "publisher": "exoport",
   "license": "Apache-2.0",
   "repository": {
