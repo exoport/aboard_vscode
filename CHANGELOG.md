@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v0.2.1 — 2026-09-13
+
+No code change. Numbered to match **aboard v0.2.1**, whose one fix the panel was exposed
+to, and released so the two can be named together.
+
+- **The panel keeps its variant across a `.aboard/theme.json` edit — on aboard v0.2.1.**
+  The panel sends both `?theme=` (fixed when it opens) and the `{__aboard:'theme', kind}`
+  message (on every editor theme change). aboard v0.2.0 never remembered the message's
+  `kind`, and an edit to the project's `theme.json` re-decides the variant — so a panel
+  opened on a light editor that had since switched to dark went light again the moment
+  the file changed, and stayed there until the next editor theme change, because a
+  `theme.json` edit reaches the board over SSE with no `load` for the panel to re-send
+  on. Fixed on the board side in aboard `c87fa6b`: the message's `kind` now replaces
+  `?theme=` as the host's word. The message and URL shapes are unchanged (`capsHash`
+  stays `8beefdfe`), which is why nothing here had to move; the docs now say which board
+  behaves which way — `docs/reference/theme.md` and the matching troubleshooting entry in
+  `docs/how-to/match-the-editor-theme.md`.
+- **The `v0.2.0` references stay as they are.** Each names the board release where
+  `?theme=` or `embed` first appeared, which v0.2.1 did not change.
+
 ## v0.2.0 — 2026-09-13
 
 Two follow-ups for aboard v0.2.0, and numbered to match it. Nothing here is a fix, and nothing breaks against an
