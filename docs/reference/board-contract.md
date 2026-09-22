@@ -95,6 +95,16 @@ one behaviour behind it: the board now remembers the `kind` of the last theme me
 an edit to `.aboard/theme.json` no longer throws the panel back to the variant in its
 `?theme=`. See [theme mapping](theme.md#when-it-re-reads).
 
+**aboard v0.3.0 changed no part of it either, and this time `capsHash` DID move** — to
+`4a958b30`, for a new command, two new mount-receipt fields and a `ui` spec that
+documents more of itself. Nothing this extension reads went with it: `schema` is still 1,
+the 21 theme tokens are the same 21, `embed` is byte-identical, and the suite passes
+against a v0.3.0 binary. That is the point of not testing `capsHash`: it says
+*different*, never *older*, and here it says different about a surface no viewer touches.
+The nearest thing to a hook is `#tab=<id>&node=<label>`, which now opens a `ui` panel as
+well as scrolling to a node — `linkFor()` already builds that URL, and nothing here calls
+it with a node, because the tree lists tabs.
+
 ## See also
 
 - [What it does](what-it-does.md) — the surfaces these calls feed.
