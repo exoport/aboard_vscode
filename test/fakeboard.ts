@@ -78,6 +78,10 @@ export interface FakeBoard {
   waiting: number;
   /** Every `POST /poke` this board received. */
   pokes: Array<Record<string, unknown>>;
+  /** What `/aboard.json` answers: a copy of `DOC`, replaced by every accepted write. */
+  doc: typeof DOC;
+  /** Every `POST /aboard.json` body, before the board dropped what it does not know. */
+  writes: Array<Record<string, unknown>>;
   /** Announce the current count on the SSE stream, as the server does on register/release. */
   pushWaiters(): void;
   /** Announce a state change, which is what drives a reload. */
@@ -103,6 +107,8 @@ export async function startFakeBoard(): Promise<FakeBoard> {
     port: 0,
     waiting: 0,
     pokes: [],
+    doc: JSON.parse(JSON.stringify(DOC)) as typeof DOC,
+    writes: [],
     pushWaiters() {
       for (const stream of streams) {
         stream.write(`data: ${JSON.stringify({ waiters: board.waiting })}\n\n`);
@@ -137,8 +143,26 @@ export async function startFakeBoard(): Promise<FakeBoard> {
     if (url === '/health') {
       return json({ app: 'aboard', project: projectDir, port: board.port, version: '93ba033' });
     }
+    if (url === '/aboard.json' && req.method === 'POST') {
+      // Accepted, and decoded the way a board older than aboard v0.4.0 decodes
+      // it: into tab fields it knows, so `quiet` is gone with a 200 and no word.
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown> & typeof DOC;
+        board.writes.push(body);
+        const rev = board.doc.rev + 1;
+        board.doc = {
+          ...board.doc,
+          rev,
+          tabs: body.tabs.map(({ quiet: _dropped, ...tab }: Record<string, unknown>) => tab) as typeof DOC.tabs,
+        };
+        json({ rev, updatedAt: new Date().toISOString() });
+      });
+      return undefined;
+    }
     if (url === '/aboard.json') {
-      return json(DOC);
+      return json(board.doc);
     }
     if (url === '/capabilities') {
       return json({ app: 'aboard', schema: 3, capsHash: 'fake', types: [{ type: 'kanban', label: 'Kanban' }] });

@@ -185,6 +185,46 @@ describe('the two copy commands', () => {
   });
 });
 
+describe('quiet and announce', () => {
+  // One toggle in two states, like the nudge button: a context-menu entry takes
+  // its title from its command, so "Quiet" and "Announce again" are two ids, and
+  // their `when` clauses have to split every row between them — both on one row
+  // is a menu that contradicts itself, neither is a toggle that went missing.
+  const when = (id: string) => {
+    const entries = menu('view/item/context', id);
+    assert.equal(entries.length, 1, `${id} should appear once on a tab’s menu`);
+    assert.equal(entries[0]!.group, '2_edit@4');
+    const match = /viewItem =~ \/(.*)\/$/.exec(entries[0]!.when!);
+    assert.ok(match, `${id}'s when clause has no viewItem regex: ${entries[0]!.when}`);
+    return new RegExp(match[1]!);
+  };
+
+  it('offers exactly one of the two on every tab row', async () => {
+    const { contextValueFor } = await import('../src/model');
+    const quiet = when('aboard.quiet');
+    const announce = when('aboard.announce');
+    for (const tab of [
+      { id: 'ab1', type: 'notes' },
+      { id: 'ab1', type: 'notes', quiet: true },
+      { id: 'ab1', type: 'notes', touched: { by: 'a' } },
+      { id: 'ab1', type: 'notes', touched: { by: 'a' }, quiet: true },
+      { id: 'ab1', type: 'notes', pendingRemoval: { by: 'a' }, touched: { by: 'a' }, quiet: true },
+    ]) {
+      const value = contextValueFor(tab);
+      assert.equal(quiet.test(value), tab.quiet !== true, `Quiet on ${value}`);
+      assert.equal(announce.test(value), tab.quiet === true, `Announce on ${value}`);
+    }
+    // The board row is not a tab, and gets neither.
+    assert.equal(quiet.test('board') || announce.test('board'), false);
+  });
+
+  it('is hidden from the palette, because it needs a row', () => {
+    for (const id of ['aboard.quiet', 'aboard.announce']) {
+      assert.deepEqual(menu('commandPalette', id).map((m) => m.when), ['false']);
+    }
+  });
+});
+
 describe('the aboard.theme setting', () => {
   // A setting that exists only in code is a setting nobody can find: VS Code
   // builds the Settings UI from `contributes.configuration` and nothing else,

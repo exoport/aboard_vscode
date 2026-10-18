@@ -30,9 +30,16 @@ supply.
 | `aboard.denyRemoval` | Deny Removal | `$(discard)` | no | row context `1_removal@2`, when the row has a `removal` |
 | `aboard.rename` | Rename Tab | `$(edit)` | no | row context `2_edit@2` |
 | `aboard.setNote` | Set Note | `$(note)` | no | row context `2_edit@3` |
+| `aboard.quiet` | Quiet: Agent Changes Raise No Dot | `$(eye-closed)` | no | row context `2_edit@4`, when the row is not `quiet` |
+| `aboard.announce` | Announce Agent Changes Again | `$(eye)` | no | row context `2_edit@4`, when the row is `quiet` |
 | `aboard.copyId` | Copy Id | — | no | row context `3_copy@1` |
 | `aboard.copyReference` | Copy Reference | — | no | row context `3_copy@2` |
 | `aboard.copyLink` | Copy Link to This Tab | — | no | row context `3_copy@3` |
+
+Quiet and Announce are one toggle the same way: a context-menu entry takes its title from
+its command, so the two states are two ids sharing a slot. Their `when` clauses split
+every row between them — `/^tab\b(?!.*\bquiet\b)/` and `/^tab\b.*\bquiet\b/` — and
+`test/manifest.test.ts` runs both regexes against real `contextValue`s to keep it so.
 
 Two nudge commands run one handler. A `view/title` menu entry takes its icon *and* its
 tooltip from the command it names, with no per-entry override, so two states mean two

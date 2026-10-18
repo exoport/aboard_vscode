@@ -76,6 +76,8 @@ rules](../explanation/what-this-extension-is.md#three-hard-rules).
 | Deny a removal request | `aboard.denyRemoval` |
 | Rename a tab | `aboard.rename` |
 | Set a tab's note | `aboard.setNote` |
+| Quiet a tab — an agent's changes to its contents raise no dot (aboard v0.4.0) | `aboard.quiet` |
+| Announce a quiet tab's changes again | `aboard.announce` |
 | Nudge a waiting session | `aboard.nudge` |
 | Copy the id — `ab32` | `aboard.copyId` |
 | Copy the **reference** — `Migration review (ab32)` | `aboard.copyReference` |

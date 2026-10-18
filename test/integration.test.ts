@@ -495,6 +495,52 @@ describe('against a live aboard', { skip, timeout: 90_000 }, () => {
     assert.equal(again.skipped, true, 'denying an already-answered request posted anyway');
   });
 
+  // aboard v0.4.0's `quiet`. The extension only ever writes it as the human, so
+  // what is worth asking the real server is the round trip: that the key
+  // survives a human write, that an agent's state change on the quiet tab then
+  // raises no dot, and that Announce takes it off again. A binary older than
+  // v0.4.0 (the `aboard` on a PATH may be one) drops the key with a 200, which is
+  // the case the Quiet command reads back and warns about.
+  it('quiets a tab, an agent’s state change raises no dot, and announce clears it', async () => {
+    const { findAllInstances, verify } = require('../src/board') as typeof import('../src/board');
+    const { setQuiet } = require('../src/model') as typeof import('../src/model');
+
+    const { board } = await verify(findAllInstances([projectDir])[0]!);
+    assert.ok(board);
+    const doc = await board.state();
+    const id = `ab${doc.nextId ?? 1}`;
+    await writeAsAgent(board, (d) => {
+      d.nextId = (d.nextId ?? 1) + 1;
+      d.tabs.push({ id, name: 'Status', type: 'notes', state: { text: 'one\n' } });
+    });
+    await board.write((d) => {
+      delete d.tabs.find((t) => t.id === id)!.touched;
+    });
+
+    await board.write(setQuiet(id, true));
+    const quieted = (await board.state()).tabs.find((t) => t.id === id)!;
+    if (quieted.quiet !== true) {
+      assert.match(
+        String(board.instance.version),
+        /^0\.[0-3]\.|^[0-9a-f]{7,}$/,
+        `aboard ${board.instance.version} dropped quiet, and it is not older than v0.4.0`,
+      );
+      return;
+    }
+    assert.equal(quieted.touched ?? undefined, undefined, 'the human’s own write stamped a marker');
+
+    await writeAsAgent(board, (d) => {
+      d.tabs.find((t) => t.id === id)!.state = { text: 'two\n' };
+    });
+    const after = (await board.state()).tabs.find((t) => t.id === id)!;
+    assert.deepEqual(after.state, { text: 'two\n' }, 'the agent’s write did not land');
+    assert.equal(after.touched ?? undefined, undefined, 'a state change on a quiet tab raised the dot');
+
+    await board.write(setQuiet(id, false));
+    const loud = (await board.state()).tabs.find((t) => t.id === id)!;
+    assert.equal('quiet' in loud, false, 'announce left quiet on the tab');
+  });
+
   // The bug the human hit on 2026-08-29: the board was gone and the sidebar
   // still believed in it, so the "Start the Board" button — gated on
   // `!aboard.hasBoard` in BOTH viewsWelcome clauses — was simply absent, and

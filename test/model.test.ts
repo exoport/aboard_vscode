@@ -16,6 +16,7 @@ import {
   renameTab,
   schemaMismatch,
   setNote,
+  setQuiet,
   tabItems,
   typeLabels,
 } from '../src/model';
@@ -107,6 +108,43 @@ describe('contextValue', () => {
     assert.equal(items[1]!.contextValue, 'tab.touched');
     assert.equal(items[2]!.contextValue, 'tab.removal');
     assert.equal(items[3]!.contextValue, 'tab.removal.touched');
+  });
+
+  it('adds quiet last, and only for quiet: true', () => {
+    const d = doc();
+    d.tabs[0]!.quiet = true;
+    d.tabs[1]!.quiet = true;
+    // Never written by a board (the field is omitzero), but a hand-edited file
+    // could carry it, and it means what absent means.
+    (d.tabs[2] as Record<string, unknown>).quiet = false;
+    const items = tabItems(d, typeLabels(caps));
+    assert.equal(items[0]!.contextValue, 'tab.quiet');
+    assert.equal(items[1]!.contextValue, 'tab.touched.quiet');
+    assert.equal(items[2]!.contextValue, 'tab.removal');
+  });
+});
+
+describe('a quiet tab', () => {
+  it('says so in its tooltip, in the board’s words, and nowhere else', () => {
+    const d = doc();
+    d.tabs[1]!.quiet = true;
+    const items = tabItems(d, typeLabels(caps));
+    assert.match(items[1]!.tooltip, /quiet: agent changes to its contents raise no dot/);
+    assert.doesNotMatch(items[0]!.tooltip, /quiet/);
+    // The dot is the server's to decide: a marker already up stays up.
+    assert.equal(items[1]!.dot, 'change');
+    assert.equal(items[1]!.label, '(unnamed)');
+  });
+
+  it('is set as true and cleared by removing the key, never stored as false', () => {
+    const d = doc();
+    assert.equal(setQuiet('ab71', true)(d), true);
+    assert.equal(d.tabs[0]!.quiet, true);
+    assert.equal(setQuiet('ab71', true)(d), false);
+    assert.equal(setQuiet('ab71', false)(d), true);
+    assert.equal('quiet' in d.tabs[0]!, false);
+    assert.equal(setQuiet('ab71', false)(d), false);
+    assert.equal(setQuiet('nope', true)(d), false);
   });
 });
 

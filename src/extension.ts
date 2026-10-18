@@ -24,11 +24,13 @@ import {
   approveRemoval,
   denyRemoval,
   dismissChange,
+  isQuiet,
   linkFor,
   referenceText,
   renameTab,
   schemaMismatch,
   setNote,
+  setQuiet,
   UNNAMED,
 } from './model';
 import { BoardPanel, type ThemeMode } from './panel';
@@ -506,17 +508,20 @@ class Controller implements vscode.Disposable {
     return picked?.board;
   }
 
-  private async applyEdit(board: Board, edit: Edit, what: string): Promise<void> {
+  /** `true` when the write landed or had nothing to do; a failure has been shown already. */
+  private async applyEdit(board: Board, edit: Edit, what: string): Promise<boolean> {
     try {
       const result = await board.write(edit);
       if (result.skipped) {
         this.log(`${what}: nothing to do`);
       }
       await this.reload(board);
+      return true;
     } catch (err) {
       const message = messageOf(err);
       this.log(`${what} failed: ${message}`);
       void vscode.window.showErrorMessage(`${what}: ${message}`);
+      return false;
     }
   }
 
@@ -740,6 +745,33 @@ class Controller implements vscode.Disposable {
     await this.applyEdit(node.entry.board, setNote(node.item.id, note), `Set note on ${node.item.id}`);
   }
 
+  /**
+   * Set or clear `quiet`, the right-click item the board's own strip has.
+   *
+   * Read back rather than trusted. A board older than aboard v0.4.0 decodes the
+   * write into a struct with no such field and answers 200, so the row would
+   * still offer "Quiet" after the click and nothing would say why — the silent
+   * no-op this extension exists not to be.
+   */
+  async quiet(node: Node, on: boolean): Promise<void> {
+    if (node.kind !== 'tab') {
+      return;
+    }
+    const { board } = node.entry;
+    const id = node.item.id;
+    const what = on ? `Quiet ${node.item.label}` : `Announce changes to ${node.item.label}`;
+    if (!(await this.applyEdit(board, setQuiet(id, on), what)) || !on) {
+      return;
+    }
+    const tab = this.entries.find((e) => e.board.instanceFile === board.instanceFile)?.doc?.tabs.find((t) => t.id === id);
+    if (tab && !isQuiet(tab)) {
+      const version = board.instance.version ? ` (it reports ${board.instance.version})` : '';
+      void vscode.window.showWarningMessage(
+        `${what}: the board accepted the write but dropped \`quiet\` — it is older than aboard v0.4.0${version}.`,
+      );
+    }
+  }
+
   async copyId(node: Node): Promise<void> {
     if (node.kind !== 'tab') {
       return;
@@ -860,6 +892,8 @@ export function activate(context: vscode.ExtensionContext): void {
   on('aboard.denyRemoval', (node: Node) => controller.deny(node));
   on('aboard.rename', (node: Node) => controller.rename(node));
   on('aboard.setNote', (node: Node) => controller.note(node));
+  on('aboard.quiet', (node: Node) => controller.quiet(node, true));
+  on('aboard.announce', (node: Node) => controller.quiet(node, false));
   on('aboard.copyId', (node: Node) => controller.copyId(node));
   on('aboard.copyReference', (node: Node) => controller.copyReference(node));
   on('aboard.copyLink', (node: Node) => controller.copyLink(node));

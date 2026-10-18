@@ -68,6 +68,8 @@ export interface TabDoc {
   touched?: TouchMark | null;
   pendingRemoval?: RemovalAsk | null;
   seen?: Record<string, string>;
+  /** Since aboard v0.4.0: an agent's state changes raise no dot. Never `false` on the wire. */
+  quiet?: boolean;
   [extra: string]: unknown;
 }
 

@@ -44,6 +44,18 @@ function isMark(value: unknown): boolean {
 }
 
 /**
+ * `quiet: true` — since aboard v0.4.0, an agent's changes to the tab's state
+ * raise no dot. Only `true` counts: the board never writes `false` (the field is
+ * `omitzero`), and its own page tests `=== true` too.
+ */
+export function isQuiet(tab: TabDoc): boolean {
+  return tab.quiet === true;
+}
+
+/** The board's hover-title words for a quiet tab (`QUIET_TITLE` in aboard.html). */
+export const QUIET_TITLE = 'quiet: agent changes to its contents raise no dot';
+
+/**
  * Which dot a tab gets.
  *
  * Removal wins over change, and it has to: a removal request is a question with
@@ -78,6 +90,11 @@ export function tooltipFor(tab: TabDoc, labels: TypeLabels): string {
     const by = touched?.by ? `\`${touched.by}\`` : 'an agent';
     lines.push('', `Changed by ${by}${touched?.at ? ` at ${touched.at}` : ''}${touched?.note ? ` — ${touched.note}` : ''}`);
   }
+  if (isQuiet(tab)) {
+    // Last, and in the board's own words: the board says it in the tab's hover
+    // title and nowhere else, so the tooltip is the one place this says it too.
+    lines.push('', `_${QUIET_TITLE}_`);
+  }
   return lines.join('\n');
 }
 
@@ -93,6 +110,9 @@ export function contextValueFor(tab: TabDoc): string {
   }
   if (isMark(tab.touched)) {
     parts.push('touched');
+  }
+  if (isQuiet(tab)) {
+    parts.push('quiet');
   }
   return parts.join('.');
 }
@@ -270,6 +290,29 @@ export function renameTab(id: string, name: string): Edit {
       return false;
     }
     tab.name = name;
+    return true;
+  };
+}
+
+/**
+ * Set or clear `quiet`. Off removes the key rather than storing `false`, as the
+ * board does.
+ *
+ * The human's write, so the server stamps nothing for it either way. A board
+ * older than aboard v0.4.0 accepts the write and drops the key while decoding it,
+ * with a 200 — which is why the caller reads the tab back afterwards.
+ */
+export function setQuiet(id: string, on: boolean): Edit {
+  return (doc) => {
+    const tab = findTab(doc, id);
+    if (!tab || isQuiet(tab) === on) {
+      return false;
+    }
+    if (on) {
+      tab.quiet = true;
+    } else {
+      delete tab.quiet;
+    }
     return true;
   };
 }

@@ -15,7 +15,7 @@ as this one.
 |---|---|
 | `<root>/.aboard/run/instance.json`, found by **walking up** from each workspace folder | port discovery, mirroring how `aboard` itself finds its project root. Never assume a port: it is derived from the discovered root's path. `instance.<name>.json` is a named board on the same project. See [discovery and starting a board](discovery-and-start.md). |
 | `GET /health` | liveness; `version` for the status bar; `project`, compared against the discovered root (a stale instance file from a dead server is otherwise indistinguishable from a live one); `app`, which is `aboard` or `ape-aboard`; `base`, the URL prefix when the server was started with `--base-path`. |
-| `GET /aboard.json` | the tree: per tab `id`, `name`, `type`, `note`, `touched{by,at,note}`, `pendingRemoval{by,reason}`. |
+| `GET /aboard.json` | the tree: per tab `id`, `name`, `type`, `note`, `touched{by,at,note}`, `pendingRemoval{by,reason}`, and from aboard v0.4.0 `quiet`. |
 | `GET /events` (SSE) | live refresh. Three frame kinds on one stream, told apart by key: `origin` → the state changed; `waiters` → the notify count changed; `ui` → the *page's* own code changed, which the board handles itself and **this extension ignores entirely**. |
 | `GET /capabilities` | `{type, label, blurb, …}` per renderer, for tooltips, and `schema` for noticing drift — so no type label and no schema number is hardcoded here. From aboard v0.2.0, `embed.params` too: the shell's URL parameters and their values, which is how this extension learns that `?chrome=notabs` is understood. |
 | `POST /aboard.json` | writes: the whole document plus `__base`, `__by: "human"`, `__origin: "vscode"`. `409` → re-read, redo the edit, retry **once**, then tell the human. |
@@ -104,6 +104,20 @@ against a v0.3.0 binary. That is the point of not testing `capsHash`: it says
 The nearest thing to a hook is `#tab=<id>&node=<label>`, which now opens a `ui` panel as
 well as scrolling to a node — `linkFor()` already builds that URL, and nothing here calls
 it with a node, because the tree lists tabs.
+
+## One from aboard v0.4.0 — taken
+
+- **`quiet: true` on a tab** — an agent's changes to that tab's *state* raise no dot. The server decides what that means (the write that turns it on is stamped once, a marker already up is carried forward, and a rename, a new note or a request stamped done still raise the dot), so the row's dot is still just `touched`. What this extension adds is what the board's own strip has: the tooltip ends with the board's hover-title words, and the row's menu carries **Quiet: Agent Changes Raise No Dot** or **Announce Agent Changes Again**, written as the human. Off removes the key rather than writing `false`, as the board does.
+
+`capsHash` did not move (still `4a958b30`), and nothing else this extension reads did
+either: `schema` is 1, the 21 tokens are the same 21, `embed` is byte-identical. Every
+write here already carried tab fields it does not know through untouched (`TabDoc` keeps
+an index signature), so a v0.2.x extension never stripped `quiet` from a tab — it just
+could not show or change it.
+
+**An older board drops the key**, with a 200 and no warning, because it decodes tabs into
+fields it knows. So the Quiet command reads the tab back after its write and, when the
+key is gone, says the board is older than aboard v0.4.0 and names the version it reports.
 
 ## See also
 
