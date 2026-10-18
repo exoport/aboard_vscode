@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## v0.3.0 — 2026-10-18
+
+The sidebar side of **aboard v0.4.0**'s `quiet` tab. Numbered v0.3.0 rather than to match
+the board: this extension had no release for aboard v0.3.0, which changed nothing it
+reads. Nothing breaks against an older board.
+
+- **feat: Quiet and Announce on a tab's right-click menu.** aboard v0.4.0 lets a tab
+  carry `quiet: true`, so an agent's changes to its state raise no unread dot — for a
+  tab an agent rewrites after every command. The board's own strip can set and clear it
+  from its right-click menu, and now the sidebar can too: **Quiet: Agent Changes Raise
+  No Dot** on a loud row, **Announce Agent Changes Again** on a quiet one, written as
+  the human. Off removes the key rather than writing `false`, as the board does. A
+  quiet row's tooltip ends with the board's own hover-title words, and that is the only
+  place it shows, as on the board. The dot is still `touched` and nothing else, because
+  the server decides what quiet suppresses.
+- **An older board drops `quiet` with a 200, and the sidebar says so.** A board before
+  aboard v0.4.0 decodes tabs into fields it knows, so the key disappears with no
+  warning. The Quiet command reads the tab back after its write and, when the key is
+  gone, warns that the board is older than v0.4.0 and names the version it reports.
+- **Checked against a v0.4.0 binary:** `capsHash` stays `4a958b30`, `schema` is 1, the
+  21 theme tokens and `embed` are unchanged, and `npm test` passes 249/249 with 0
+  skipped. That includes a new integration test: a human quiets a real tab, an agent's
+  state change raises no dot, and Announce clears it. Against an older binary on PATH,
+  the same test checks that the key was dropped.
+- **No v0.2.x write ever stripped `quiet`.** Every edit here carries tab fields it does
+  not know through untouched, so an older extension on a v0.4.0 board leaves a quiet tab
+  quiet. It just cannot show or change it.
+
 ## v0.2.1 — 2026-09-13
 
 No code change. Numbered to match **aboard v0.2.1**, whose one fix the panel was exposed

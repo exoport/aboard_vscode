@@ -2,7 +2,7 @@
   "name": "aboard-vscode",
   "displayName": "Aboard Panel",
   "description": "A native sidebar tree of an aboard project's tabs, with the board itself in a webview panel.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "exoport",
   "license": "Apache-2.0",
   "repository": {
@@ -143,6 +143,18 @@
         "icon": "$(note)"
       },
       {
+        "command": "aboard.quiet",
+        "title": "Quiet: Agent Changes Raise No Dot",
+        "category": "Aboard",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "aboard.announce",
+        "title": "Announce Agent Changes Again",
+        "category": "Aboard",
+        "icon": "$(eye)"
+      },
+      {
         "command": "aboard.copyId",
         "title": "Copy Id",
         "category": "Aboard"
@@ -190,6 +202,14 @@
         },
         {
           "command": "aboard.setNote",
+          "when": "false"
+        },
+        {
+          "command": "aboard.quiet",
+          "when": "false"
+        },
+        {
+          "command": "aboard.announce",
           "when": "false"
         },
         {
@@ -267,6 +287,16 @@
           "command": "aboard.setNote",
           "when": "view == aboard.tabs && viewItem =~ /^tab\\b/",
           "group": "2_edit@3"
+        },
+        {
+          "command": "aboard.quiet",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b(?!.*\\bquiet\\b)/",
+          "group": "2_edit@4"
+        },
+        {
+          "command": "aboard.announce",
+          "when": "view == aboard.tabs && viewItem =~ /^tab\\b.*\\bquiet\\b/",
+          "group": "2_edit@4"
         },
         {
           "command": "aboard.copyId",
