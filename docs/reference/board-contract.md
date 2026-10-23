@@ -119,6 +119,11 @@ could not show or change it.
 fields it knows. So the Quiet command reads the tab back after its write and, when the
 key is gone, says the board is older than aboard v0.4.0 and names the version it reports.
 
+**aboard v0.4.1 changed no part of it** — its `capabilities` output is byte-identical to
+v0.4.0's (`capsHash` `4a958b30`). Its fixes are a CLI hint, `apply --help` text, the
+example board and the path in one checker warning, none of which a viewer reads. The
+suite passes 249/249, 0 skipped, against a v0.4.1 binary.
+
 ## See also
 
 - [What it does](what-it-does.md) — the surfaces these calls feed.
