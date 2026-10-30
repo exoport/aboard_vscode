@@ -208,11 +208,15 @@ class Controller implements vscode.Disposable {
       onStatus: (connected, detail) => {
         if (!connected) {
           this.log(`event stream for ${board.title} dropped: ${detail ?? 'unknown'} — reconnecting`);
-          // A dropped stream is the ONLY signal that a board has died.
+          // A dropped stream is the ONLY signal that a board has died
+          // UNGRACEFULLY.
           //
-          // Nothing else arrives: aboard never removes `instance.json` — not on
-          // SIGTERM, not on any path — so the file watcher this controller
-          // relies on never fires for a death, only for a birth. Left at a bare
+          // A board that shuts down properly (Ctrl-C, SIGTERM) closes its
+          // listener and then deletes its own `instance.json` (that order since
+          // aboard v0.4.2), so the watcher fires. One that is killed, crashes or
+          // is suspended leaves the record verbatim: no filesystem event exists,
+          // and the file watcher this controller relies on never fires for that
+          // death, only for a birth. Left at a bare
           // `return`, `aboard.hasBoard` stayed true for as long as the extension
           // host lived, both `viewsWelcome` clauses are gated on
           // `!aboard.hasBoard`, and so the Start button was simply gone and the
